@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบเช็คชื่ออัจฉริยะ — Lecturer Dashboard (Mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --blue:#2563EB;
+    --blue-dark:#1D4ED8;
+    --blue-light:#EFF4FF;
+    --bg:#F3F5FA;
+    --white:#FFFFFF;
+    --ink:#0F172A;
+    --slate:#64748B;
+    --slate-light:#94A3B8;
+    --line:#E4E9F2;
+    --green:#16A34A; --green-bg:#E7F7ED;
+    --red:#DC2626; --red-bg:#FCEAEA;
+    --orange:#F97316; --orange-bg:#FFF1E4;
+    --cyan:#0EA5E9; --cyan-bg:#E6F6FD;
+    --sidebar-bg:rgba(255,255,255,0.65);
+    --glass-bg:rgba(255,255,255,0.75);
+    --glass-border:rgba(255,255,255,0.9);
+    --shadow-soft:0 10px 30px -14px rgba(15,23,42,0.15);
+    --shadow-card:0 6px 18px -12px rgba(15,23,42,0.12);
+    --radius:16px;
+  }
+  body[data-theme="dark"]{
+    --blue:#3B82F6;
+    --blue-dark:#93C5FD;
+    --blue-light:rgba(59,130,246,0.18);
+    --bg:#0B1220;
+    --white:#111827;
+    --ink:#E2E8F0;
+    --slate:#94A3B8;
+    --slate-light:#64748B;
+    --line:#1F2937;
+    --green:#4ADE80; --green-bg:rgba(74,222,128,0.15);
+    --red:#F87171; --red-bg:rgba(248,113,113,0.15);
+    --orange:#FB923C; --orange-bg:rgba(251,146,60,0.15);
+    --cyan:#38BDF8; --cyan-bg:rgba(56,189,248,0.15);
+    --sidebar-bg:rgba(17,24,39,0.75);
+    --glass-bg:rgba(17,24,39,0.65);
+    --glass-border:rgba(255,255,255,0.08);
+    --shadow-soft:0 10px 30px -14px rgba(0,0,0,0.6);
+    --shadow-card:0 6px 18px -12px rgba(0,0,0,0.5);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Prompt', sans-serif; font-size:14px;
+    transition:background .2s, color .2s;
+  }
+  h1,h2,h3{font-family:'Kanit',sans-serif; margin:0;}
+  .shell{display:flex; min-height:100vh;}
+
+  /* Sidebar */
+  .sidebar{
+    width:250px; flex-shrink:0; background:var(--sidebar-bg); backdrop-filter:blur(18px);
+    border-right:1px solid var(--line); padding:22px 16px; display:flex; flex-direction:column; gap:4px;
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .sidebar .logo-row{display:flex; align-items:center; gap:10px; padding:0 8px 22px; border-bottom:1px solid var(--line); margin-bottom:16px;}
+  .sidebar .logo-row img{width:38px; height:38px; object-fit:contain;}
+  .sidebar .logo-row .lt{font-family:'Kanit',sans-serif; font-weight:600; font-size:14px; line-height:1.3;}
+  .sidebar .logo-row .ls{font-size:11px; color:var(--slate);}
+  .navitem{
+    display:flex; align-items:center; gap:11px; padding:11px 14px; border-radius:12px; cursor:pointer;
+    color:var(--slate); font-weight:400; transition:all .15s; font-size:13.5px;
+  }
+  .navitem:hover{background:var(--blue-light); color:var(--blue);}
+  .navitem.active{background:var(--blue); color:#fff; font-weight:500; box-shadow:0 8px 16px -6px rgba(37,99,235,0.45);}
+  .navitem .ic{width:19px; text-align:center; font-size:16px;}
+  .sidebar-foot{margin-top:auto; padding:14px 10px 0; border-top:1px solid var(--line); display:flex; align-items:center; gap:10px;}
+  .avatar-sm{width:34px; height:34px; border-radius:50%; background:var(--blue-light); color:var(--blue); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:13px;}
+  .theme-toggle{
+    display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:14px;
+    padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:var(--white);
+    color:var(--slate); font-family:'Prompt',sans-serif; font-size:12.5px; font-weight:500; cursor:pointer;
+  }
+  .theme-toggle:hover{border-color:var(--blue); color:var(--blue);}
+
+  /* Main */
+  .main{flex:1; min-width:0; padding:22px 26px 60px;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; gap:16px; flex-wrap:wrap;}
+  .topbar h1{font-size:21px; font-weight:600;}
+  .topbar .sub{font-size:12.5px; color:var(--slate); margin-top:3px; font-weight:400;}
+  .topbar-actions{display:flex; align-items:center; gap:12px;}
+  .search-box{
+    display:flex; align-items:center; gap:8px; background:var(--white); border:1px solid var(--line); border-radius:10px;
+    padding:9px 14px; min-width:220px; color:var(--slate-light);
+  }
+  .icon-btn{
+    width:38px; height:38px; border-radius:10px; background:var(--white); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; color:var(--slate); cursor:pointer; position:relative;
+  }
+  .icon-btn .dot{position:absolute; top:7px; right:7px; width:7px; height:7px; border-radius:50%; background:var(--red);}
+
+  .glass-card{
+    background:var(--glass-bg); backdrop-filter:blur(10px); border:1px solid var(--glass-border);
+    border-radius:var(--radius); box-shadow:var(--shadow-soft); padding:20px 22px;
+  }
+  .card{background:var(--white); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow-card);}
+
+  .grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:22px;}
+  .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+
+  .stat-card{display:flex; align-items:center; gap:14px;}
+  .stat-card .ic{width:46px; height:46px; border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;}
+  .stat-card .n{font-family:'Kanit',sans-serif; font-size:24px; font-weight:600; line-height:1.1;}
+  .stat-card .l{font-size:12px; color:var(--slate); margin-top:2px;}
+
+  .section-title{display:flex; align-items:center; justify-content:space-between; margin:26px 0 14px;}
+  .section-title h2{font-size:16px; font-weight:600;}
+  .section-title a{font-size:12.5px; color:var(--blue); font-weight:500; text-decoration:none;}
+
+  .class-row{
+    display:flex; align-items:center; gap:16px; padding:15px 18px; border-radius:14px; background:var(--white);
+    border:1px solid var(--line); margin-bottom:10px; flex-wrap:wrap;
+  }
+  .class-row .time-block{
+    background:var(--blue-light); color:var(--blue-dark); border-radius:10px; padding:9px 13px; text-align:center;
+    font-weight:500; font-size:12.5px; min-width:80px;
+  }
+  .class-row .info{flex:1; min-width:180px;}
+  .class-row .info .name{font-weight:500; font-size:14.5px;}
+  .class-row .info .meta{font-size:12px; color:var(--slate); margin-top:2px;}
+  .badge{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:500; padding:5px 11px; border-radius:20px;}
+  .badge-gray{background:#EEF1F6; color:var(--slate);}
+  .badge-blue{background:var(--blue-light); color:var(--blue-dark);}
+  .badge-green{background:var(--green-bg); color:var(--green);}
+  .badge-red{background:var(--red-bg); color:var(--red);}
+  .badge-orange{background:var(--orange-bg); color:var(--orange);}
+  .badge-cyan{background:var(--cyan-bg); color:var(--cyan);}
+  .btn{font-family:'Prompt',sans-serif; font-weight:500; font-size:13px; padding:9px 17px; border-radius:10px; border:none; cursor:pointer;}
+  .btn-primary{background:var(--blue); color:#fff;}
+  .btn-primary:hover{background:var(--blue-dark);}
+  .btn-outline{background:var(--white); border:1px solid var(--line); color:var(--ink);}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{text-align:left; color:var(--slate); font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.3px; padding:10px 12px; border-bottom:1px solid var(--line);}
+  td{padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .person{display:flex; align-items:center; gap:10px;}
+  .init{width:32px; height:32px; border-radius:50%; background:var(--blue-light); color:var(--blue-dark); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:12px; flex-shrink:0;}
+  .status-select{font-family:'Prompt',sans-serif; font-size:12px; padding:5px 8px; border-radius:8px; border:1px solid var(--line); background:var(--white); color:var(--ink);}
+
+  .qr-panel{display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .qr-box{width:200px; height:200px; border-radius:16px; background:repeating-linear-gradient(45deg,#0F172A 0 8px,#fff 8px 16px); position:relative; overflow:hidden;}
+  .qr-box::after{content:""; position:absolute; inset:14px; background:#fff; border-radius:10px;}
+  .qr-box .qc{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Kanit',sans-serif; font-weight:600; color:var(--blue); font-size:13px; z-index:2;}
+  .countdown{font-family:'Kanit',sans-serif; font-size:26px; font-weight:600; color:var(--blue);}
+  .pin-display{display:flex; gap:8px;}
+  .pin-digit{width:38px; height:46px; background:var(--blue-light); border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:'Kanit',sans-serif; font-size:20px; font-weight:600; color:var(--blue-dark);}
+
+  .filter-bar{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px;}
+  .filter-bar select, .filter-bar input{
+    font-family:'Prompt',sans-serif; font-size:13px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:var(--white); color:var(--ink);
+  }
+  .chip{padding:7px 14px; border-radius:20px; font-size:12.5px; font-weight:500; border:1px solid var(--line); background:var(--white); color:var(--slate); cursor:pointer;}
+  .chip.active{background:var(--blue); color:#fff; border-color:var(--blue);}
+
+  .pct-bar{width:70px; height:6px; border-radius:4px; background:#EEF1F6; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;}
+  .pct-bar > div{height:100%; border-radius:4px;}
+
+  .leave-card{display:flex; gap:14px; padding:16px 18px; border:1px solid var(--line); border-radius:14px; background:var(--white); margin-bottom:12px; flex-wrap:wrap;}
+  .leave-card .info{flex:1; min-width:220px;}
+  .leave-card .name{font-weight:500; font-size:14px;}
+  .leave-card .meta{font-size:12px; color:var(--slate); margin-top:3px; line-height:1.6;}
+  .leave-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+
+  .empty-note{text-align:center; padding:26px 10px; color:var(--slate); font-size:13px;}
+  .page{display:none;}
+  .page.active{display:block;}
+
+  .chart-wrap{position:relative; height:230px;}
+
+  @media(max-width:900px){
+    .grid-4{grid-template-columns:repeat(2,1fr);}
+    .grid-2, .grid-3{grid-template-columns:1fr;}
+    .sidebar{position:fixed; z-index:50; left:-260px; transition:left .2s; box-shadow:0 0 40px rgba(0,0,0,0.2);}
+    .sidebar.open{left:0;}
+    .main{padding:16px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="authGate" style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;">
+  <div class="card" style="max-width:380px; width:100%; text-align:center; padding:36px 28px;">
+    <img src="fms-logo.png" alt="FMS logo" style="width:56px; height:56px; object-fit:contain; margin-bottom:14px;" onerror="this.style.display='none'">
+    <h1 style="font-size:19px; margin-bottom:6px;">FMS Attendance</h1>
+    <p class="muted" id="authMessage" style="margin-bottom:22px;">เข้าสู่ระบบด้วยบัญชี Google มหาวิทยาลัย (@ssru.ac.th) สำหรับอาจารย์</p>
+    <button class="btn btn-primary" id="googleLoginBtn" style="width:100%;">เข้าสู่ระบบด้วย Google</button>
+  </div>
+</div>
+
+<div class="shell" id="shell" style="display:none;">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo-row">
+      <img src="fms-logo.png" alt="FMS logo">
+      <div>
+        <div class="lt">FMS Attendance</div>
+        <div class="ls">Faculty of Management Science</div>
+      </div>
+    </div>
+    <div class="navitem active" data-page="dashboard"><span class="ic"><i class="ti">▦</i></span>Dashboard ภาพรวม</div>
+    <div class="navitem" data-page="live"><span class="ic">◔</span>เช็คชื่อ Real-time</div>
+    <div class="navitem" data-page="stats"><span class="ic">▤</span>สรุปการเข้าเรียน</div>
+    <div class="navitem" data-page="students"><span class="ic">☰</span>จัดการรายชื่อ</div>
+    <div class="navitem" data-page="leave"><span class="ic">✉</span>อนุมัติการลา</div>
+    <div class="navitem" data-page="reports"><span class="ic">⇩</span>รายงาน</div>
+    <div class="sidebar-foot" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="avatar-sm" id="userAvatar">อจ</div>
+        <div style="min-width:0;">
+          <div style="font-weight:500; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;" id="userName">กำลังโหลด…</div>
+          <div style="font-size:11px; color:var(--slate); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;" id="userEmail"></div>
+        </div>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="สลับโหมดสว่าง/มืด">
+        <span id="themeIcon">☀</span><span id="themeLabel">โหมดสว่าง</span>
+      </button>
+      <button class="theme-toggle" id="logoutBtn" type="button">ออกจากระบบ</button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <section class="page active" id="page-dashboard">
+      <div class="topbar">
+        <div>
+          <h1>ภาพรวมคาบเรียนวันนี้</h1>
+          <div class="sub" id="todayDateLabel">กำลังโหลด…</div>
+        </div>
+        <div class="topbar-actions">
+          <div class="icon-btn">🔔<span class="dot"></span></div>
+        </div>
+      </div>
+
+      <div class="grid-4" id="summaryCards"></div>
+
+      <div class="card" style="margin-bottom:18px;">
+        <h2 style="font-size:14px; margin-bottom:14px;">เพิ่มคาบเรียนวันนี้</h2>
+        <div class="filter-bar" style="margin-bottom:12px;">
+          <input type="text" id="newCode" placeholder="รหัสวิชา เช่น MK214" style="width:130px;">
+          <input type="text" id="newSubject" placeholder="ชื่อวิชา">
+          <input type="text" id="newRoom" placeholder="ห้อง เช่น MS-105" style="width:120px;">
+          <input type="time" id="newStart">
+          <input type="time" id="newEnd">
+        </div>
+        <button class="btn btn-primary" id="addSessionBtn">+ เพิ่มคาบเรียน</button>
+      </div>
+
+      <div class="section-title"><h2>คาบเรียนของฉันวันนี้</h2></div>
+      <div id="sessionList"></div>
+    </section>
+
+    <!-- LIVE CHECKIN -->
+    <section class="page" id="page-live">
+      <div class="topbar">
+        <div><h1>เช็คชื่อ Real-time</h1><div class="sub" id="liveSessionLabel">เลือกคาบเรียนที่จะเช็คชื่อ</div></div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <select id="liveSessionPicker" style="font-family:'Prompt',sans-serif; font-size:13px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:var(--white); color:var(--ink);"></select>
+          <button class="btn btn-outline" id="closeSessionBtn" style="border-color:var(--red); color:var(--red);">ปิดรอบเช็คชื่อ</button>
+        </div>
+      </div>
+      <div id="liveEmptyState" class="card" style="display:none;"><div class="empty-note">ยังไม่มีคาบเรียนที่เปิดอยู่ — ไปที่ Dashboard เพื่อเปิดเช็คชื่อก่อนครับ</div></div>
+      <div class="grid-2" style="align-items:start;" id="liveContent">
+        <div class="glass-card qr-panel">
+          <div id="qrHolder" class="qr-box"><div class="qc">QR</div></div>
+          <div class="countdown" id="qrCountdown">00:20</div>
+          <div class="sub" style="text-align:center;">QR เปลี่ยนอัตโนมัติทุก 20 วินาที เพื่อป้องกันการนำไปใช้ซ้ำ</div>
+          <button class="btn btn-outline" id="refreshQrBtn">↻ รีเฟรช QR ทันที</button>
+          <div style="width:100%; border-top:1px dashed var(--line); margin:6px 0;"></div>
+          <div class="sub">หรือกรอก PIN</div>
+          <div class="pin-display" id="pinDisplay"></div>
+          <div class="sub" style="text-align:center; margin-top:4px;">ให้นักศึกษาเปิดหน้าเช็คชื่อ แล้วกรอก PIN นี้</div>
+        </div>
+
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">
+            <h2 id="checkedCountLabel">เช็คชื่อแล้ว 0 / 0</h2>
+            <span class="badge badge-green" id="presentBadge">มา 0</span>
+          </div>
+          <div style="max-height:340px; overflow-y:auto;" id="liveTableWrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="card" style="margin-bottom:18px; border-color:var(--orange); background:var(--orange-bg);" id="phaseNote">
+      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 2 หน้า (Dashboard และ เช็คชื่อ Real-time) ส่วนอีก 4 เมนูด้านล่างยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+    </div>
+
+    <!-- STATS DASHBOARD -->
+    <section class="page" id="page-stats">
+      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div class="topbar"><div><h1>สรุปการเข้าเรียน</h1><div class="sub">ภาพรวมทุกรายวิชาที่สอน</div></div></div>
+      <div class="filter-bar">
+        <select><option>ทุกรายวิชา</option><option>MK214 การตลาดดิจิทัล</option><option>MG301 การจัดการเชิงกลยุทธ์</option></select>
+        <select><option>ภาคเรียนที่ 1</option><option>ภาคเรียนที่ 2</option></select>
+        <select><option>ปีการศึกษา 2569</option><option>ปีการศึกษา 2568</option></select>
+        <input type="text" placeholder="เลือกช่วงวันที่">
+      </div>
+      <div class="grid-4">
+        <div class="card stat-card"><div class="ic" style="background:var(--green-bg); color:var(--green);">✓</div><div><div class="n">1,842</div><div class="l">มาเรียน</div></div></div>
+        <div class="card stat-card"><div class="ic" style="background:var(--orange-bg); color:var(--orange);">⏱</div><div><div class="n">203</div><div class="l">สาย</div></div></div>
+        <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">✉</div><div><div class="n">88</div><div class="l">ลา</div></div></div>
+        <div class="card stat-card"><div class="ic" style="background:var(--red-bg); color:var(--red);">✕</div><div><div class="n">67</div><div class="l">ขาด</div></div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card"><h2 style="font-size:14px; margin-bottom:12px;">แนวโน้มการเข้าเรียนย้อนหลัง</h2><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
+        <div class="card"><h2 style="font-size:14px; margin-bottom:12px;">สัดส่วนสถานะการเข้าเรียน</h2><div class="chart-wrap"><canvas id="pieChart"></canvas></div></div>
+      </div>
+      <div class="card" style="margin-top:16px;"><h2 style="font-size:14px; margin-bottom:12px;">เปรียบเทียบเปอร์เซ็นต์เข้าเรียนแต่ละวิชา</h2><div class="chart-wrap"><canvas id="barChart"></canvas></div></div>
+    </section>
+
+    <!-- STUDENTS -->
+    <section class="page" id="page-students">
+      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div class="topbar"><div><h1>จัดการรายชื่อนักศึกษา</h1><div class="sub">การตลาดดิจิทัล (MK214) · 78 คน</div></div></div>
+
+      <div class="card" style="margin-bottom:18px;">
+        <div class="section-title" style="margin-top:0;"><h2>นำเข้า / ซิงค์รายชื่อนักศึกษา</h2><span class="badge badge-green">✓ ซิงค์ล่าสุด 24 ก.ค. 08:12</span></div>
+        <div class="grid-2">
+          <div style="display:flex; gap:14px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:14px;">
+            <div class="stat-card ic" style="width:44px; height:44px; border-radius:12px; background:var(--green-bg); color:var(--green); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">⊞</div>
+            <div style="flex:1;">
+              <div style="font-weight:500; font-size:14px;">Google Sheets</div>
+              <div class="sub" style="margin-top:2px;">เชื่อมต่อแล้ว · sheet "รายชื่อ MK214 - 2569S1"</div>
+            </div>
+            <button class="btn btn-outline">ซิงค์ตอนนี้</button>
+          </div>
+          <div style="display:flex; gap:14px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:14px;">
+            <div class="ic" style="width:44px; height:44px; border-radius:12px; background:var(--blue-light); color:var(--blue-dark); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">⇧</div>
+            <div style="flex:1;">
+              <div style="font-weight:500; font-size:14px;">อัปโหลดไฟล์ Excel</div>
+              <div class="sub" style="margin-top:2px;">รองรับไฟล์ .xlsx</div>
+            </div>
+            <button class="btn btn-primary">เลือกไฟล์</button>
+          </div>
+        </div>
+        <div class="sub" style="margin-top:14px;">คอลัมน์ที่ซิงค์: <span class="badge badge-blue">รหัสนักศึกษา</span> <span class="badge badge-blue">ชื่อ</span> <span class="badge badge-blue">หมู่เรียน</span> <span class="badge badge-blue">รายวิชา</span></div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-box" style="flex:1; min-width:220px;"><span>⌕</span><span style="font-size:13px; color:var(--slate-light);">ค้นหาชื่อหรือรหัสนักศึกษา</span></div>
+        <div class="chip active">ทั้งหมด</div>
+        <div class="chip">มา</div>
+        <div class="chip">สาย</div>
+        <div class="chip">ขาด</div>
+        <div class="chip">ลา</div>
+      </div>
+      <div class="card" style="padding:8px 0;">
+        <table>
+          <thead><tr><th>นักศึกษา</th><th>หมู่เรียน</th><th>รายวิชา</th><th>% เข้าเรียน</th><th>สถานะล่าสุด</th></tr></thead>
+          <tbody>
+            <tr><td><div class="person"><div class="init">สร</div>สมฤดี รักเรียน · 6512301</div></td><td>MK-A</td><td>MK214</td><td><span class="pct-bar"><div style="width:94%; background:var(--green);"></div></span>94%</td><td><span class="badge badge-green">มา</span></td></tr>
+            <tr style="background:var(--red-bg);"><td><div class="person"><div class="init">อธ</div>อธิษฐ์ ไม่มาเรียน · 6512322</div></td><td>MK-B</td><td>MK214</td><td><span class="pct-bar"><div style="width:61%; background:var(--red);"></div></span>61%</td><td><span class="badge badge-red">ขาด</span></td></tr>
+            <tr><td><div class="person"><div class="init">วช</div>วิชัย ชาญกิจ · 6512302</div></td><td>MK-A</td><td>MK214</td><td><span class="pct-bar"><div style="width:78%; background:var(--orange);"></div></span>78%</td><td><span class="badge badge-orange">สาย</span></td></tr>
+            <tr><td><div class="person"><div class="init">นพ</div>นภัสวรรณ พงษ์ไทย · 6512305</div></td><td>MK-B</td><td>MK214</td><td><span class="pct-bar"><div style="width:97%; background:var(--green);"></div></span>97%</td><td><span class="badge badge-green">มา</span></td></tr>
+            <tr><td><div class="person"><div class="init">ปว</div>ปวีณา วงศ์สุข · 6512314</div></td><td>MK-A</td><td>MK214</td><td><span class="pct-bar"><div style="width:88%; background:var(--green);"></div></span>88%</td><td><span class="badge badge-cyan">ลา</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="sub" style="margin-top:10px;">แถวสีแดงอ่อน = เข้าเรียนต่ำกว่าเกณฑ์ 80% · คลิกแถวเพื่อดูประวัติรายบุคคล</div>
+    </section>
+
+    <!-- LEAVE APPROVAL -->
+    <section class="page" id="page-leave">
+      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div class="topbar"><div><h1>อนุมัติการลา</h1><div class="sub">คำขอลาที่รอดำเนินการ 3 รายการ</div></div></div>
+
+      <div class="leave-card">
+        <div class="init" style="width:44px; height:44px; font-size:14px;">สร</div>
+        <div class="info">
+          <div class="name">สมฤดี รักเรียน · 6512301</div>
+          <div class="meta">การตลาดดิจิทัล (MK214) · ลาป่วย 24 ก.ค. 2569<br>เหตุผล: มีไข้ ไปพบแพทย์ที่คลินิก · <a href="#" style="color:var(--blue);">ดูใบรับรองแพทย์ (Google Drive)</a></div>
+        </div>
+        <div class="leave-actions">
+          <span class="badge badge-orange">รออนุมัติ</span>
+          <button class="btn btn-primary">อนุมัติ</button>
+          <button class="btn btn-outline">ไม่อนุมัติ</button>
+        </div>
+      </div>
+
+      <div class="leave-card">
+        <div class="init" style="width:44px; height:44px; font-size:14px;">ธก</div>
+        <div class="info">
+          <div class="name">ธนกร กิจสมบูรณ์ · 6512309</div>
+          <div class="meta">การจัดการเชิงกลยุทธ์ (MG301) · ลากิจ 25 ก.ค. 2569<br>เหตุผล: ธุระครอบครัวต่างจังหวัด · <a href="#" style="color:var(--blue);">ดูหลักฐานแนบ (Google Drive)</a></div>
+        </div>
+        <div class="leave-actions"><span class="badge badge-green">อนุมัติแล้ว</span></div>
+      </div>
+
+      <div class="leave-card">
+        <div class="init" style="width:44px; height:44px; font-size:14px;">นพ</div>
+        <div class="info">
+          <div class="name">นภัสวรรณ พงษ์ไทย · 6512305</div>
+          <div class="meta">หลักการบัญชี 2 (AC102) · ลาป่วย 22 ก.ค. 2569<br>เหตุผล: ผ่าตัดฟันคุด · <a href="#" style="color:var(--blue);">ดูใบรับรองแพทย์ (Google Drive)</a></div>
+        </div>
+        <div class="leave-actions"><span class="badge badge-red">ไม่อนุมัติ</span></div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="page" id="page-reports">
+      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div class="topbar"><div><h1>รายงาน</h1><div class="sub">สร้างและส่งออกรายงานการเข้าเรียน</div></div></div>
+      <div class="card">
+        <h2 style="font-size:14px; margin-bottom:14px;">ตัวกรองก่อนสร้างรายงาน</h2>
+        <div class="filter-bar" style="margin-bottom:0;">
+          <select><option>ทุกรายวิชา</option><option>MK214 การตลาดดิจิทัล</option></select>
+          <select><option>ทุกห้องเรียน</option><option>MS-105</option></select>
+          <select><option>ภาคเรียนที่ 1</option></select>
+          <select><option>ปีการศึกษา 2569</option></select>
+          <input type="text" placeholder="เลือกช่วงวันที่">
+        </div>
+      </div>
+
+      <div class="section-title"><h2>ตัวอย่างรายงาน</h2>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-outline">⇩ Excel (.xlsx)</button>
+          <button class="btn btn-primary">⇩ PDF</button>
+        </div>
+      </div>
+      <div class="card" style="padding:8px 0;">
+        <table>
+          <thead><tr><th>รายวิชา</th><th>มาเรียน</th><th>สาย</th><th>ลา</th><th>ขาด</th><th>% เข้าเรียน</th></tr></thead>
+          <tbody>
+            <tr><td>การตลาดดิจิทัล (MK214)</td><td>612</td><td>58</td><td>22</td><td>18</td><td><span class="badge badge-green">91%</span></td></tr>
+            <tr><td>การจัดการเชิงกลยุทธ์ (MG301)</td><td>498</td><td>71</td><td>19</td><td>26</td><td><span class="badge badge-orange">84%</span></td></tr>
+            <tr><td>หลักการบัญชี 2 (AC102)</td><td>410</td><td>44</td><td>15</td><td>12</td><td><span class="badge badge-green">92%</span></td></tr>
+            <tr><td>การเงินธุรกิจ (FN220)</td><td>322</td><td>30</td><td>17</td><td>11</td><td><span class="badge badge-green">90%</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://mgtxmannvshnwtflufph.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndHhtYW5udnNobnd0Zmx1ZnBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4NzgxMDEsImV4cCI6MjEwMDQ1NDEwMX0.ypUf_mPy4gqJUt6ScQXP21Q0x11GLvMvfCqzxSAr5yA';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null, currentProfile = null;
+
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(s){ return escapeHtml(s); }
+function toast(msg, ms=2600){
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:9px; font-size:13.5px; z-index:1000; max-width:90vw; text-align:center;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), ms);
+}
+function todayISODate(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function nowHHMM(){ return new Date().toTimeString().slice(0,5); }
+function initials(name){
+  return String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+}
+function fmtTimeShort(iso){
+  try{ return new Date(iso).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}); }catch(e){ return iso; }
+}
+function hhmm(t){ return t ? String(t).slice(0,5) : ''; }
+
+const state = { sessions: [] };
+
+// ===== AUTH =====
+function showLogin(msg){
+  document.getElementById('authGate').style.display = 'flex';
+  document.getElementById('shell').style.display = 'none';
+  if(msg) document.getElementById('authMessage').textContent = msg;
+}
+async function showApp(session, profile){
+  currentUser = session.user; currentProfile = profile;
+  document.getElementById('authGate').style.display = 'none';
+  document.getElementById('shell').style.display = 'flex';
+  document.getElementById('userName').textContent = profile.name || profile.email;
+  document.getElementById('userEmail').textContent = profile.email;
+  document.getElementById('userAvatar').textContent = initials(profile.name || profile.email);
+  await initApp();
+}
+async function checkAuth(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session){ showLogin(); return; }
+  const { data: profile, error } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+  if(error || !profile){
+    showLogin('ไม่พบโปรไฟล์ผู้ใช้ ลองเข้าสู่ระบบใหม่อีกครั้ง');
+    return;
+  }
+  if(profile.role !== 'lecturer'){
+    await sb.auth.signOut();
+    showLogin('บัญชีนี้ไม่ใช่บัญชีอาจารย์/เจ้าหน้าที่ กรุณาใช้บัญชี ssru.ac.th ของอาจารย์');
+    return;
+  }
+  await showApp(session, profile);
+}
+document.getElementById('googleLoginBtn').addEventListener('click', async ()=>{
+  await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href, queryParams: { hd: 'ssru.ac.th', prompt: 'select_account' } }
+  });
+});
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  window.location.reload();
+});
+sb.auth.onAuthStateChange((event)=>{
+  if(event === 'SIGNED_IN') checkAuth();
+});
+
+// ===== SESSIONS DATA =====
+async function loadSessions(){
+  const { data, error } = await sb.from('sessions').select('*').order('date', {ascending:false}).order('start_time');
+  if(error){ toast('โหลดคาบเรียนไม่สำเร็จ'); return []; }
+  return data.map(s=>({...s, start: hhmm(s.start_time), end: hhmm(s.end_time)}));
+}
+
+function timeStatusLabel(s){
+  const now = nowHHMM();
+  if(now < s.start) return {text:'ยังไม่ถึงเวลา', cls:'badge-gray', ic:'⏱'};
+  if(now <= s.end) return {text:'กำลังสอน', cls:'badge-blue', ic:'●'};
+  return {text:'สิ้นสุดแล้ว', cls:'badge-gray', ic:'✓'};
+}
+
+function renderSessionRow(s){
+  const t = timeStatusLabel(s);
+  let rightHtml;
+  if(s.status==='open'){
+    rightHtml = `<span class="badge badge-green">✓ เปิดเช็คชื่อแล้ว</span><button class="btn btn-outline" onclick="viewLive('${s.id}')">ดูหน้าสด</button>`;
+  } else if(s.status==='closed'){
+    rightHtml = `<span class="badge badge-gray">■ ปิดรอบแล้ว</span>`;
+  } else {
+    rightHtml = `<button class="btn btn-primary" onclick="openCheckin('${s.id}')">เปิดเช็คชื่อ</button>`;
+  }
+  return `
+    <div class="class-row">
+      <div class="time-block">${s.start}<br>${s.end}</div>
+      <div class="info"><div class="name">${escapeHtml(s.subject)}${s.code?' ('+escapeHtml(s.code)+')':''}</div><div class="meta">ห้อง ${escapeHtml(s.room||'-')}</div></div>
+      <span class="badge ${t.cls}">${t.ic} ${t.text}</span>
+      ${rightHtml}
+    </div>`;
+}
+
+function renderDashboard(){
+  document.getElementById('todayDateLabel').textContent = new Date().toLocaleDateString('th-TH', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  const today = todayISODate();
+  const todays = state.sessions.filter(s=>s.date===today);
+  const rooms = new Set(todays.map(s=>s.room).filter(Boolean)).size;
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="card stat-card"><div class="ic" style="background:var(--blue-light); color:var(--blue-dark);">▦</div><div><div class="n">${todays.length}</div><div class="l">คาบวันนี้</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--orange-bg); color:var(--orange);">⌂</div><div><div class="n">${rooms}</div><div class="l">ห้องเรียน</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">☺</div><div><div class="n">-</div><div class="l">นักศึกษาทั้งหมด</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--green-bg); color:var(--green);">%</div><div><div class="n">-</div><div class="l">เข้าเรียนเฉลี่ยวันนี้</div></div></div>
+  `;
+  const list = document.getElementById('sessionList');
+  list.innerHTML = todays.length ? todays.map(renderSessionRow).join('') : `<div class="card"><div class="empty-note">ยังไม่มีคาบเรียนวันนี้ — เพิ่มด้านบนได้เลย</div></div>`;
+}
+
+async function openCheckin(id){
+  const pin = String(Math.floor(1000+Math.random()*9000));
+  const { error } = await sb.from('sessions').update({status:'open', pin, pin_updated_at:new Date().toISOString()}).eq('id', id);
+  if(error){ toast('เปิดเช็คชื่อไม่สำเร็จ'); return; }
+  toast('เปิดเช็คชื่อแล้ว');
+  state.sessions = await loadSessions();
+  renderDashboard();
+  liveSessionId = id;
+  document.querySelector('.navitem[data-page="live"]').click();
+}
+function viewLive(id){
+  liveSessionId = id;
+  document.querySelector('.navitem[data-page="live"]').click();
+}
+
+let liveSessionId = null;
+let qrTimerId = null, qrSecondsLeft = 20, liveTableTimerId = null, liveChannel = null;
+
+function populateLivePicker(){
+  const picker = document.getElementById('liveSessionPicker');
+  const opens = state.sessions.filter(s=>s.status==='open');
+  picker.innerHTML = opens.map(s=>`<option value="${s.id}">${escapeHtml(s.code||'-')} ${escapeHtml(s.subject)} · ${escapeHtml(s.room||'-')}</option>`).join('');
+  if(!opens.length){
+    document.getElementById('liveEmptyState').style.display = 'block';
+    document.getElementById('liveContent').style.display = 'none';
+    document.getElementById('liveSessionLabel').textContent = 'เลือกคาบเรียนที่จะเช็คชื่อ';
+    liveSessionId = null;
+    stopLiveTimers();
+    return;
+  }
+  document.getElementById('liveEmptyState').style.display = 'none';
+  document.getElementById('liveContent').style.display = 'grid';
+  if(!liveSessionId || !opens.find(s=>s.id===liveSessionId)) liveSessionId = opens[0].id;
+  picker.value = liveSessionId;
+  startLiveSession();
+}
+document.getElementById('liveSessionPicker').addEventListener('change', (e)=>{
+  liveSessionId = e.target.value;
+  startLiveSession();
+});
+
+function stopLiveTimers(){
+  if(qrTimerId) clearInterval(qrTimerId);
+  if(liveTableTimerId) clearInterval(liveTableTimerId);
+  if(liveChannel){ sb.removeChannel(liveChannel); liveChannel = null; }
+  qrTimerId = null; liveTableTimerId = null;
+}
+
+function renderQr(s){
+  document.getElementById('pinDisplay').innerHTML = s.pin.split('').map(d=>`<div class="pin-digit">${d}</div>`).join('');
+  const holder = document.getElementById('qrHolder');
+  holder.innerHTML = '';
+  try{
+    new QRCode(holder, {text: s.pin, width:172, height:172, colorDark:'#0F172A', colorLight:'#ffffff'});
+  }catch(e){
+    holder.innerHTML = '<div class="qc">'+s.pin+'</div>';
+  }
+  document.getElementById('qrCountdown').textContent = '00:20';
+}
+
+async function rotatePin(s){
+  s.pin = String(Math.floor(1000+Math.random()*9000));
+  s.pinUpdatedAt = new Date().toISOString();
+  await sb.from('sessions').update({pin:s.pin, pin_updated_at:s.pinUpdatedAt}).eq('id', s.id);
+  renderQr(s);
+}
+
+function startLiveSession(){
+  stopLiveTimers();
+  const s = state.sessions.find(x=>x.id===liveSessionId);
+  if(!s) return;
+  document.getElementById('liveSessionLabel').textContent = `${s.code||''} ${s.subject} · ห้อง ${s.room||'-'}`;
+  renderQr(s);
+  qrSecondsLeft = 20;
+  qrTimerId = setInterval(async ()=>{
+    qrSecondsLeft--;
+    document.getElementById('qrCountdown').textContent = '00:'+String(Math.max(qrSecondsLeft,0)).padStart(2,'0');
+    if(qrSecondsLeft<=0){
+      await rotatePin(s);
+      qrSecondsLeft = 20;
+    }
+  }, 1000);
+  loadLiveTable();
+  liveTableTimerId = setInterval(loadLiveTable, 15000);
+  liveChannel = sb.channel('att-'+s.id)
+    .on('postgres_changes', {event:'*', schema:'public', table:'attendance', filter:`session_id=eq.${s.id}`}, ()=>{ loadLiveTable(); })
+    .subscribe();
+}
+
+async function loadLiveTable(){
+  const s = state.sessions.find(x=>x.id===liveSessionId);
+  if(!s) return;
+  const { data, error } = await sb.from('attendance').select('*').eq('session_id', s.id).order('checked_at');
+  if(error) return;
+  renderLiveTable(data, s);
+}
+
+function renderLiveTable(records, s){
+  const present = records.filter(r=>r.status==='มา').length;
+  document.getElementById('checkedCountLabel').textContent = `เช็คชื่อแล้ว ${records.length}`;
+  document.getElementById('presentBadge').textContent = `มา ${present}`;
+  const wrap = document.getElementById('liveTableWrap');
+  if(!records.length){
+    wrap.innerHTML = `<div class="empty-note">ยังไม่มีใครเช็คชื่อ</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>นักศึกษา</th><th>เวลา</th><th>สถานะ</th></tr></thead>
+      <tbody>${records.map(r=>`
+        <tr>
+          <td><div class="person"><div class="init">${initials(r.student_name)}</div>${escapeHtml(r.student_name)} · ${escapeHtml(r.student_id||r.student_email)}</div></td>
+          <td>${fmtTimeShort(r.checked_at)}</td>
+          <td><select class="status-select" data-rid="${escapeAttr(r.id)}">
+            ${['มา','สาย','ขาด','ลา'].map(opt=>`<option value="${opt}" ${r.status===opt?'selected':''}>${opt}</option>`).join('')}
+          </select></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+  wrap.querySelectorAll('select[data-rid]').forEach(sel=>{
+    sel.onchange = async ()=>{
+      const { error } = await sb.from('attendance').update({status: sel.value}).eq('id', sel.dataset.rid);
+      if(error) toast('บันทึกไม่สำเร็จ');
+    };
+  });
+}
+
+document.getElementById('refreshQrBtn').addEventListener('click', async ()=>{
+  const s = state.sessions.find(x=>x.id===liveSessionId);
+  if(s){ await rotatePin(s); qrSecondsLeft = 20; }
+});
+document.getElementById('closeSessionBtn').addEventListener('click', async ()=>{
+  const s = state.sessions.find(x=>x.id===liveSessionId);
+  if(!s) return;
+  if(!confirm('ยืนยันปิดรอบเช็คชื่อ? นักศึกษาจะเช็คชื่อเพิ่มไม่ได้')) return;
+  const { error } = await sb.from('sessions').update({status:'closed'}).eq('id', s.id);
+  if(error){ toast('ปิดรอบไม่สำเร็จ'); return; }
+  toast('ปิดรอบเช็คชื่อแล้ว');
+  state.sessions = await loadSessions();
+  populateLivePicker();
+});
+document.getElementById('addSessionBtn').addEventListener('click', async ()=>{
+  const code = document.getElementById('newCode').value.trim();
+  const subject = document.getElementById('newSubject').value.trim();
+  const room = document.getElementById('newRoom').value.trim();
+  const start = document.getElementById('newStart').value;
+  const end = document.getElementById('newEnd').value;
+  if(!subject || !start || !end){ toast('กรุณากรอกชื่อวิชา เวลาเริ่ม และเวลาสิ้นสุด'); return; }
+  const { error } = await sb.from('sessions').insert({
+    code: code || null, subject, room: room || null,
+    date: todayISODate(), start_time: start, end_time: end,
+    status: 'scheduled', created_by: currentUser.id
+  });
+  if(error){ toast('เพิ่มคาบเรียนไม่สำเร็จ'); return; }
+  ['newCode','newSubject','newRoom','newStart','newEnd'].forEach(i=>document.getElementById(i).value='');
+  toast('เพิ่มคาบเรียนแล้ว');
+  state.sessions = await loadSessions();
+  renderDashboard();
+});
+
+async function initApp(){
+  state.sessions = await loadSessions();
+  renderDashboard();
+}
+
+checkAuth();
+</script>
+
+<script>
+let isDark = false;
+const themeToggleBtn = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+const themeLabel = document.getElementById('themeLabel');
+themeToggleBtn.addEventListener('click', ()=>{
+  isDark = !isDark;
+  document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  themeIcon.textContent = isDark ? '☾' : '☀';
+  themeLabel.textContent = isDark ? 'โหมดมืด' : 'โหมดสว่าง';
+  applyChartTheme(isDark);
+});
+
+function applyChartTheme(dark){
+  const textColor = dark ? '#94A3B8' : '#64748B';
+  const gridColor = dark ? '#1F2937' : '#E4E9F2';
+  [window.lineChartInstance, window.pieChartInstance, window.barChartInstance].forEach(ch=>{
+    if(!ch) return;
+    if(ch.options.scales && ch.options.scales.y){
+      ch.options.scales.y.ticks.color = textColor;
+      ch.options.scales.y.grid.color = gridColor;
+    }
+    if(ch.options.scales && ch.options.scales.x){
+      ch.options.scales.x.ticks.color = textColor;
+      ch.options.scales.x.grid.color = gridColor;
+    }
+    if(ch.options.plugins && ch.options.plugins.legend && ch.options.plugins.legend.labels){
+      ch.options.plugins.legend.labels.color = textColor;
+    }
+    ch.update();
+  });
+}
+
+document.querySelectorAll('.navitem').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.navitem').forEach(i=>i.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    item.classList.add('active');
+    const page = item.dataset.page;
+    document.getElementById('page-'+page).classList.add('active');
+    if(page !== 'live') stopLiveTimers();
+    if(page === 'dashboard') renderDashboard();
+    if(page === 'live') populateLivePicker();
+  });
+});
+
+const lineCtx = document.getElementById('lineChart');
+if(lineCtx){
+  window.lineChartInstance = new Chart(lineCtx, {
+    type:'line',
+    data:{
+      labels:['สัปดาห์ 1','สัปดาห์ 2','สัปดาห์ 3','สัปดาห์ 4','สัปดาห์ 5','สัปดาห์ 6'],
+      datasets:[{label:'% เข้าเรียน', data:[88,85,90,84,91,87], borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,0.08)', fill:true, tension:0.35, pointRadius:3}]
+    },
+    options:{plugins:{legend:{display:false}}, scales:{y:{min:60,max:100, ticks:{callback:v=>v+'%'}}}}
+  });
+}
+const pieCtx = document.getElementById('pieChart');
+if(pieCtx){
+  window.pieChartInstance = new Chart(pieCtx, {
+    type:'pie',
+    data:{
+      labels:['มา','สาย','ลา','ขาด'],
+      datasets:[{data:[79,9,4,8], backgroundColor:['#16A34A','#F97316','#0EA5E9','#DC2626']}]
+    },
+    options:{plugins:{legend:{position:'bottom', labels:{boxWidth:10, font:{size:11}}}}}
+  });
+}
+const barCtx = document.getElementById('barChart');
+if(barCtx){
+  window.barChartInstance = new Chart(barCtx, {
+    type:'bar',
+    data:{
+      labels:['MK214','MG301','AC102','FN220','MG215'],
+      datasets:[{label:'% เข้าเรียน', data:[91,84,92,90,86], backgroundColor:'#2563EB', borderRadius:6, maxBarThickness:38}]
+    },
+    options:{plugins:{legend:{display:false}}, scales:{y:{min:0,max:100, ticks:{callback:v=>v+'%'}}}}
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เช็คชื่อเข้าเรียน — FMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --blue:#2563EB; --blue-dark:#1D4ED8; --blue-light:#EFF4FF;
+    --bg:#F3F5FA; --white:#FFFFFF; --ink:#0F172A; --slate:#64748B; --slate-light:#94A3B8; --line:#E4E9F2;
+    --green:#16A34A; --green-bg:#E7F7ED;
+    --red:#DC2626; --red-bg:#FCEAEA;
+    --orange:#F97316; --orange-bg:#FFF1E4;
+    --radius:16px;
+  }
+  body[data-theme="dark"]{
+    --blue:#3B82F6; --blue-dark:#93C5FD; --blue-light:rgba(59,130,246,0.18);
+    --bg:#0B1220; --white:#111827; --ink:#E2E8F0; --slate:#94A3B8; --slate-light:#64748B; --line:#1F2937;
+    --green:#4ADE80; --green-bg:rgba(74,222,128,0.15);
+    --red:#F87171; --red-bg:rgba(248,113,113,0.15);
+    --orange:#FB923C; --orange-bg:rgba(251,146,60,0.15);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:'Prompt',sans-serif;
+    min-height:100vh; display:flex; justify-content:center; padding:26px 16px 60px; transition:background .2s,color .2s;
+  }
+  h1,h2{font-family:'Kanit',sans-serif; margin:0;}
+  .wrap{width:100%; max-width:420px;}
+  .top{display:flex; align-items:center; gap:10px; margin-bottom:18px;}
+  .top img{width:36px; height:36px; object-fit:contain;}
+  .top .t1{font-family:'Kanit',sans-serif; font-weight:600; font-size:14px;}
+  .top .t2{font-size:11px; color:var(--slate);}
+  .theme-toggle{margin-left:auto; width:36px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--white); cursor:pointer; font-size:15px;}
+
+  .card{background:var(--white); border:1px solid var(--line); border-radius:var(--radius); padding:26px 22px; box-shadow:0 10px 30px -16px rgba(15,23,42,0.18); text-align:center;}
+  .muted{color:var(--slate); font-size:13px;}
+  h2.step-title{font-size:18px; font-weight:600; margin-bottom:6px;}
+
+  .pin-input-row{display:flex; gap:10px; justify-content:center; margin:22px 0 6px;}
+  .pin-input-row input{
+    width:52px; height:62px; text-align:center; font-family:'Kanit',sans-serif; font-size:26px; font-weight:600;
+    border:1.5px solid var(--line); border-radius:12px; background:var(--bg); color:var(--ink);
+  }
+  .pin-input-row input:focus{outline:2px solid var(--blue); border-color:var(--blue);}
+
+  .btn{width:100%; font-family:'Prompt',sans-serif; font-weight:500; font-size:15px; padding:13px; border-radius:12px; border:none; cursor:pointer;}
+  .btn-primary{background:var(--blue); color:#fff;}
+  .btn-primary:hover{background:var(--blue-dark);}
+  .btn-primary:disabled{opacity:0.55; cursor:not-allowed;}
+  .btn-ghost{background:transparent; border:1.5px solid var(--line); color:var(--ink); margin-top:10px;}
+
+  .session-info{background:var(--blue-light); border-radius:12px; padding:14px 16px; margin-bottom:18px; text-align:left;}
+  .session-info .nm{font-weight:600; font-size:15px; color:var(--blue-dark);}
+  .session-info .mt{font-size:12.5px; color:var(--slate); margin-top:2px;}
+
+  .profile-row{display:flex; align-items:center; gap:12px; text-align:left; background:var(--bg); border-radius:12px; padding:12px 14px; margin-bottom:18px;}
+  .profile-row .av{width:42px; height:42px; border-radius:50%; background:var(--blue-light); color:var(--blue-dark); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:14px; flex-shrink:0;}
+  .profile-row .nm{font-weight:500; font-size:14.5px;}
+  .profile-row .em{font-size:12px; color:var(--slate);}
+
+  .stamp-wrap{text-align:center; padding:10px 0 4px;}
+  .stamp{
+    width:130px; height:130px; margin:0 auto 16px; border-radius:50%; border:4px solid var(--green); color:var(--green);
+    display:flex; align-items:center; justify-content:center; font-size:56px; transform:rotate(-8deg) scale(0.5); opacity:0;
+    animation:stampIn .4s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  .stamp.late{border-color:var(--orange); color:var(--orange);}
+  @keyframes stampIn{
+    0%{transform:rotate(-8deg) scale(0.5); opacity:0;}
+    60%{transform:rotate(-8deg) scale(1.1); opacity:1;}
+    100%{transform:rotate(-8deg) scale(1); opacity:1;}
+  }
+  .success-name{font-family:'Kanit',sans-serif; font-size:17px; font-weight:600;}
+  .success-meta{font-size:13px; color:var(--slate); margin-top:4px;}
+  .status-pill{display:inline-block; margin-top:10px; padding:5px 14px; border-radius:20px; font-size:12.5px; font-weight:500;}
+  .status-pill.present{background:var(--green-bg); color:var(--green);}
+  .status-pill.late{background:var(--orange-bg); color:var(--orange);}
+
+  .error-box{background:var(--red-bg); color:var(--red); border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; text-align:left;}
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:9px; font-size:13.5px; z-index:1000; max-width:90vw; text-align:center;}
+  .footnote{text-align:center; font-size:11px; color:var(--slate-light); margin-top:20px; line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <img src="fms-logo.png" alt="FMS logo" onerror="this.style.display='none'">
+    <div>
+      <div class="t1">FMS Attendance</div>
+      <div class="t2">เช็คชื่อเข้าเรียนสำหรับนักศึกษา</div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="สลับโหมดสว่าง/มืด">☀</button>
+  </div>
+
+  <div class="card" id="cardArea"></div>
+  <p class="footnote">ต้องเข้าสู่ระบบด้วยบัญชี Google มหาวิทยาลัย (@ssru.ac.th) ของคุณเองเท่านั้น<br>ระบบจะบันทึกชื่อ-อีเมลของคุณตามบัญชีที่ login โดยอัตโนมัติ</p>
+</div>
+
+<script>
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function toast(msg, ms=2600){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), ms);
+}
+function initials(name){
+  return String(name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase() || '?';
+}
+function fmtTime(iso){
+  try{ return new Date(iso).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}); }catch(e){ return iso; }
+}
+
+const SUPABASE_URL = 'https://mgtxmannvshnwtflufph.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndHhtYW5udnNobnd0Zmx1ZnBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4NzgxMDEsImV4cCI6MjEwMDQ1NDEwMX0.ypUf_mPy4gqJUt6ScQXP21Q0x11GLvMvfCqzxSAr5yA';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const state = { step:'login', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null };
+
+function render(){
+  const area = document.getElementById('cardArea');
+  if(state.step==='login') area.innerHTML = renderLoginStep();
+  else if(state.step==='pin') area.innerHTML = renderPinStep();
+  else if(state.step==='confirm') area.innerHTML = renderConfirmStep();
+  else if(state.step==='done') area.innerHTML = renderDoneStep();
+  bindEvents();
+}
+
+function renderLoginStep(){
+  return `
+    <h2 class="step-title">เข้าสู่ระบบ</h2>
+    <p class="muted" style="margin-bottom:20px;">ใช้บัญชี Google มหาวิทยาลัย (@ssru.ac.th) ของคุณ</p>
+    ${state.loginError ? `<div class="error-box">${escapeHtml(state.loginError)}</div>` : ''}
+    <button class="btn btn-primary" id="googleLoginBtn">เข้าสู่ระบบด้วย Google</button>
+  `;
+}
+
+function renderPinStep(){
+  return `
+    <div class="profile-row">
+      <div class="av">${initials(state.profile.name)}</div>
+      <div>
+        <div class="nm">${escapeHtml(state.profile.name || state.profile.email)}</div>
+        <div class="em">${escapeHtml(state.profile.email)}</div>
+      </div>
+    </div>
+    <h2 class="step-title">กรอกรหัส PIN เช็คชื่อ</h2>
+    <p class="muted">ขอ PIN 4 หลักจากอาจารย์</p>
+    ${state.pinError ? `<div class="error-box">${escapeHtml(state.pinError)}</div>` : ''}
+    <div class="pin-input-row">
+      ${[0,1,2,3].map(i=>`<input type="tel" maxlength="1" inputmode="numeric" class="pin-box" data-i="${i}" value="${state.pinDigits ? (state.pinDigits[i]||'') : ''}">`).join('')}
+    </div>
+    <button class="btn btn-primary" id="pinSubmitBtn" style="margin-top:16px;">ตรวจสอบ PIN</button>
+    <button class="btn btn-ghost" id="logoutBtn">ออกจากระบบ</button>
+  `;
+}
+
+function renderConfirmStep(){
+  const s = state.matchedSession;
+  return `
+    <div class="session-info">
+      <div class="nm">${escapeHtml(s.subject)}${s.code?' ('+escapeHtml(s.code)+')':''}</div>
+      <div class="mt">ห้อง ${escapeHtml(s.room||'-')} · ${escapeHtml(s.start)}–${escapeHtml(s.end)}</div>
+    </div>
+    <div class="profile-row">
+      <div class="av">${initials(state.profile.name)}</div>
+      <div>
+        <div class="nm">${escapeHtml(state.profile.name || state.profile.email)}</div>
+        <div class="em">${escapeHtml(state.profile.student_id || state.profile.email)}</div>
+      </div>
+    </div>
+    ${state.confirmError ? `<div class="error-box">${escapeHtml(state.confirmError)}</div>` : ''}
+    <p class="muted" style="margin-bottom:16px;">ยืนยันว่าเป็นคุณจริง แล้วกดเช็คชื่อ</p>
+    <button class="btn btn-primary" id="confirmSubmitBtn">ยืนยันเช็คชื่อ</button>
+    <button class="btn btn-ghost" id="backToPinBtn">← กลับไปกรอก PIN ใหม่</button>
+  `;
+}
+
+function renderDoneStep(){
+  const late = state.result.status === 'สาย';
+  return `
+    <div class="stamp-wrap">
+      <div class="stamp ${late?'late':''}">${late ? '⏱' : '✓'}</div>
+      <div class="success-name">${escapeHtml(state.result.name)}</div>
+      <div class="success-meta">${escapeHtml(state.result.subject)} · ${state.result.timeLabel}</div>
+      <span class="status-pill ${late?'late':'present'}">${late?'บันทึกว่า มาสาย':'เช็คชื่อสำเร็จ'}</span>
+    </div>
+    <button class="btn btn-ghost" id="checkAnotherBtn" style="margin-top:18px;">เช็คชื่ออีกคาบ</button>
+  `;
+}
+
+function bindEvents(){
+  const area = document.getElementById('cardArea');
+
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
+  if(googleLoginBtn){
+    googleLoginBtn.onclick = async ()=>{
+      await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href, queryParams: { hd: 'ssru.ac.th', prompt: 'select_account' } }
+      });
+    };
+  }
+
+  area.querySelectorAll('.pin-box').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      inp.value = inp.value.replace(/[^0-9]/g,'').slice(0,1);
+      if(inp.value){
+        const next = area.querySelector(`.pin-box[data-i="${Number(inp.dataset.i)+1}"]`);
+        if(next) next.focus();
+      }
+    });
+    inp.addEventListener('keydown', (e)=>{
+      if(e.key==='Backspace' && !inp.value){
+        const prev = area.querySelector(`.pin-box[data-i="${Number(inp.dataset.i)-1}"]`);
+        if(prev){ prev.focus(); }
+      }
+    });
+  });
+  const firstPinBox = area.querySelector('.pin-box');
+  if(firstPinBox && !firstPinBox.value) firstPinBox.focus();
+
+  const pinSubmitBtn = document.getElementById('pinSubmitBtn');
+  if(pinSubmitBtn){ pinSubmitBtn.onclick = handlePinSubmit; }
+
+  const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+  if(confirmSubmitBtn){ confirmSubmitBtn.onclick = handleConfirmSubmit; }
+
+  const backToPinBtn = document.getElementById('backToPinBtn');
+  if(backToPinBtn){ backToPinBtn.onclick = ()=>{ state.step='pin'; state.pinDigits=null; state.pinError=null; render(); }; }
+
+  const checkAnotherBtn = document.getElementById('checkAnotherBtn');
+  if(checkAnotherBtn){ checkAnotherBtn.onclick = ()=>{
+    state.step='pin'; state.pinDigits=null; state.pinError=null; state.matchedSession=null;
+    render();
+  }; }
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(logoutBtn){ logoutBtn.onclick = async ()=>{ await sb.auth.signOut(); window.location.reload(); }; }
+}
+
+async function handlePinSubmit(){
+  const area = document.getElementById('cardArea');
+  const digits = Array.from(area.querySelectorAll('.pin-box')).map(i=>i.value);
+  const pin = digits.join('');
+  if(pin.length !== 4){ state.pinError = 'กรอก PIN ให้ครบ 4 หลัก'; state.pinDigits = digits; render(); return; }
+  const btn = document.getElementById('pinSubmitBtn');
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+  const { data, error } = await sb.from('sessions').select('*').eq('status','open').eq('pin', pin).limit(1);
+  btn.disabled = false; btn.textContent = 'ตรวจสอบ PIN';
+  if(error || !data || !data.length){
+    state.pinError = 'ไม่พบคาบเรียนที่เปิดอยู่ตรงกับ PIN นี้ ลองขอ PIN ใหม่จากอาจารย์';
+    state.pinDigits = digits;
+    render();
+    return;
+  }
+  const s = data[0];
+  state.matchedSession = {...s, start: String(s.start_time).slice(0,5), end: String(s.end_time).slice(0,5)};
+  state.pinError = null;
+  state.step = 'confirm';
+  render();
+}
+
+async function handleConfirmSubmit(){
+  const s = state.matchedSession;
+  const btn = document.getElementById('confirmSubmitBtn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  const status = computeStatus(s);
+  const { error } = await sb.from('attendance').insert({
+    session_id: s.id,
+    student_email: state.profile.email,
+    student_id: state.profile.student_id,
+    student_name: state.profile.name || state.profile.email,
+    status
+  });
+  if(error){
+    if(error.code === '23505'){
+      const { data: existing } = await sb.from('attendance').select('*').eq('session_id', s.id).eq('student_email', state.profile.email).single();
+      btn.disabled = false; btn.textContent = 'ยืนยันเช็คชื่อ';
+      state.step = 'done';
+      state.result = { name: state.profile.name, subject: s.subject, timeLabel: 'เช็คไปแล้วเมื่อ '+fmtTime(existing.checked_at), status: existing.status };
+      render();
+      return;
+    }
+    btn.disabled = false; btn.textContent = 'ยืนยันเช็คชื่อ';
+    state.confirmError = 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
+    render();
+    return;
+  }
+  btn.disabled = false; btn.textContent = 'ยืนยันเช็คชื่อ';
+  state.step = 'done';
+  state.result = { name: state.profile.name, subject: s.subject, timeLabel: fmtTime(new Date().toISOString()), status };
+  render();
+}
+
+function computeStatus(s){
+  try{
+    const now = new Date();
+    const [sh, sm] = s.start.split(':').map(Number);
+    const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
+    const diffMin = (now - startDate) / 60000;
+    return diffMin > 15 ? 'สาย' : 'มา';
+  }catch(e){ return 'มา'; }
+}
+
+async function checkAuth(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session){ state.step='login'; render(); return; }
+  const { data: profile, error } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+  if(error || !profile){
+    state.step='login'; state.loginError='ไม่พบโปรไฟล์ผู้ใช้ ลองเข้าสู่ระบบใหม่'; render(); return;
+  }
+  state.profile = profile;
+  state.step = 'pin';
+  render();
+}
+sb.auth.onAuthStateChange((event)=>{
+  if(event === 'SIGNED_IN') checkAuth();
+});
+
+let isDark = false;
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  isDark = !isDark;
+  document.body.setAttribute('data-theme', isDark?'dark':'light');
+  document.getElementById('themeToggle').textContent = isDark ? '☾' : '☀';
+});
+
+checkAuth();
+</script>
+</body>
+</html>
