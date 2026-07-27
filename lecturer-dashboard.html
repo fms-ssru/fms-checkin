@@ -1146,18 +1146,32 @@ async function renderRosterPage(){
 }
 
 let editingRosterId = null;
+let selectedRosterIds = new Set();
 
 function renderRosterTable(){
   const wrap = document.getElementById('rosterTableWrap');
   const q = rosterSearch.trim().toLowerCase();
   const rows = rosterData.filter(r => !q || r.name.toLowerCase().includes(q) || r.student_id.toLowerCase().includes(q));
   if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบรายชื่อ — เพิ่มด้านบนได้เลย</div>'; return; }
+  const visibleIds = new Set(rows.map(r=>r.student_id));
+  const allVisibleSelected = rows.length > 0 && rows.every(r => selectedRosterIds.has(r.student_id));
+
   wrap.innerHTML = `
+    ${selectedRosterIds.size ? `
+      <div style="display:flex; align-items:center; gap:10px; padding:10px 18px; background:var(--red-bg); border-bottom:1px solid var(--line);">
+        <span style="font-size:13px; color:var(--red); font-weight:500;">เลือกไว้ ${selectedRosterIds.size} คน</span>
+        <button class="btn btn-outline btn-sm" id="bulkDeleteBtn" style="color:var(--red); border-color:var(--red);">ลบที่เลือกทั้งหมด</button>
+        <button class="btn btn-ghost btn-sm" id="bulkClearBtn">ยกเลิกการเลือก</button>
+      </div>` : ''}
     <table>
-      <thead><tr><th>นักศึกษา</th><th>หมู่เรียน</th><th>เช็คชื่อแล้ว</th><th></th></tr></thead>
+      <thead><tr>
+        <th style="width:36px;"><input type="checkbox" id="selectAllRoster" ${allVisibleSelected?'checked':''}></th>
+        <th>นักศึกษา</th><th>หมู่เรียน</th><th>เช็คชื่อแล้ว</th><th></th>
+      </tr></thead>
       <tbody>${rows.map(r=>{
         if(r.student_id === editingRosterId){
           return `<tr>
+            <td></td>
             <td colspan="2">
               <span class="muted" style="margin-right:8px;">${escapeHtml(r.student_id)}</span>
               <input type="text" class="edit-name" value="${escapeAttr(r.name)}" style="width:180px; padding:6px 8px; border-radius:6px; border:1px solid var(--line);">
@@ -1169,6 +1183,7 @@ function renderRosterTable(){
           </tr>`;
         }
         return `<tr>
+          <td><input type="checkbox" class="roster-row-check" data-check="${escapeAttr(r.student_id)}" ${selectedRosterIds.has(r.student_id)?'checked':''}></td>
           <td><div class="person"><div class="init">${initials(r.name)}</div>${escapeHtml(r.name)} · ${escapeHtml(r.student_id)}</div></td>
           <td>${r.sectionLabel ? `<span class="badge badge-blue">${escapeHtml(r.sectionLabel)}</span>` : '-'}</td>
           <td>${r.attCount}</td>
@@ -1179,6 +1194,38 @@ function renderRosterTable(){
         </tr>`;
       }).join('')}</tbody>
     </table>`;
+
+  const selectAllBox = document.getElementById('selectAllRoster');
+  if(selectAllBox){
+    selectAllBox.onchange = ()=>{
+      if(selectAllBox.checked) visibleIds.forEach(id=>selectedRosterIds.add(id));
+      else visibleIds.forEach(id=>selectedRosterIds.delete(id));
+      renderRosterTable();
+    };
+  }
+  wrap.querySelectorAll('.roster-row-check').forEach(box=>{
+    box.onchange = ()=>{
+      const id = box.dataset.check;
+      if(box.checked) selectedRosterIds.add(id); else selectedRosterIds.delete(id);
+      renderRosterTable();
+    };
+  });
+  const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+  if(bulkDeleteBtn){
+    bulkDeleteBtn.onclick = async ()=>{
+      const ids = Array.from(selectedRosterIds);
+      if(!confirm(`ยืนยันลบนักศึกษา ${ids.length} คนที่เลือกไว้ ออกจากรายชื่อของฉัน?`)) return;
+      bulkDeleteBtn.disabled = true; bulkDeleteBtn.textContent = 'กำลังลบ...';
+      const { error } = await sb.from('roster').delete().in('student_id', ids);
+      if(error){ toast('ลบไม่สำเร็จ: ' + error.message); bulkDeleteBtn.disabled=false; bulkDeleteBtn.textContent='ลบที่เลือกทั้งหมด'; return; }
+      toast(`ลบ ${ids.length} คนแล้ว`);
+      selectedRosterIds.clear();
+      renderRosterPage();
+      renderCoursesPage();
+    };
+  }
+  const bulkClearBtn = document.getElementById('bulkClearBtn');
+  if(bulkClearBtn){ bulkClearBtn.onclick = ()=>{ selectedRosterIds.clear(); renderRosterTable(); }; }
 
   wrap.querySelectorAll('[data-edit]').forEach(btn=>{
     btn.onclick = ()=>{ editingRosterId = btn.dataset.edit; renderRosterTable(); };
@@ -1206,6 +1253,7 @@ function renderRosterTable(){
       const { error } = await sb.from('roster').delete().eq('student_id', btn.dataset.del);
       if(error){ toast('ลบไม่สำเร็จ: ' + error.message); return; }
       toast('ลบแล้ว');
+      selectedRosterIds.delete(btn.dataset.del);
       renderRosterPage();
       renderCoursesPage();
     };
