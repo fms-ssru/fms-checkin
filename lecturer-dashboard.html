@@ -382,8 +382,8 @@
 
       <div class="card" style="margin-bottom:18px;">
         <h2 style="font-size:14px; margin-bottom:12px;">1) วางรายชื่อด้วยมือ</h2>
-        <p class="muted" style="margin-bottom:10px;">รูปแบบ: <code>รหัสนักศึกษา,ชื่อ-นามสกุล</code> บรรทัดละ 1 คน</p>
-        <textarea id="rosterPasteText" rows="5" style="width:100%; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);" placeholder="6512345,สมชาย ใจดี&#10;6512346,สมหญิง รักเรียน"></textarea>
+        <p class="muted" style="margin-bottom:10px;">รูปแบบ: <code>รหัสนักศึกษา,ชื่อ-นามสกุล</code> หรือ <code>รหัสนักศึกษา,ชื่อ-นามสกุล,หมู่เรียน</code> (ถ้าใส่หมู่เรียนมาด้วย จะแยกหมู่ให้อัตโนมัติ ต้องเลือก "รายวิชา" ด้านบนไว้ก่อน) บรรทัดละ 1 คน</p>
+        <textarea id="rosterPasteText" rows="5" style="width:100%; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);" placeholder="6512345,สมชาย ใจดี,004&#10;6512346,สมหญิง รักเรียน,005"></textarea>
         <button class="btn btn-primary" id="importPasteBtn" style="margin-top:10px;">นำเข้า/อัปเดตรายชื่อ</button>
 
         <hr class="divider">
@@ -413,7 +413,12 @@
               <label class="muted" style="display:block; font-size:12px; margin-bottom:4px;">ชื่อ-นามสกุล</label>
               <select id="mapColName"></select>
             </div>
+            <div>
+              <label class="muted" style="display:block; font-size:12px; margin-bottom:4px;">หมู่เรียน (ไม่บังคับ)</label>
+              <select id="mapColSection"></select>
+            </div>
           </div>
+          <p class="muted" style="margin-bottom:12px;">ถ้าเลือกคอลัมน์หมู่เรียน ระบบจะแยกหมู่ให้อัตโนมัติตามค่าที่เจอในคอลัมน์นั้น (สร้างหมู่ใหม่ให้เองถ้ายังไม่มี) — ต้องเลือก "รายวิชา" ที่ด้านบนของหน้าไว้ก่อนด้วย</p>
           <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:12px;">
             <input type="checkbox" id="mapSkipHeader" checked> แถวแรกเป็นหัวตาราง (ข้ามแถวแรก)
           </label>
@@ -1269,12 +1274,25 @@ function parseRosterRows(rawRows){
   for(const row of rawRows){
     const id = String(row[0] ?? '').trim();
     const name = String(row[1] ?? '').trim();
+    const group = String(row[2] ?? '').trim();
     if(!id || !name) continue;
     if(!/^[0-9A-Za-z].*/.test(id)) continue;
     if(/รหัส|student.?id/i.test(id) || /ชื่อ|name/i.test(name)) continue;
-    out.push({ student_id: id, name });
+    out.push({ student_id: id, name, group: group || null });
   }
   return out;
+}
+
+// หา section ที่ตรงกับชื่อหมู่ (group) ภายใต้วิชาที่เลือก ถ้ายังไม่มีก็สร้างใหม่ให้ — cache กันเรียกซ้ำ
+async function resolveSectionIdForGroup(courseId, groupName, cache){
+  const key = courseId + '::' + groupName;
+  if(cache.has(key)) return cache.get(key);
+  const { data: existing } = await sb.from('sections').select('id').eq('course_id', courseId).eq('name', groupName).limit(1);
+  if(existing && existing.length){ cache.set(key, existing[0].id); return existing[0].id; }
+  const { data: created, error } = await sb.from('sections').insert({ course_id: courseId, name: groupName }).select('id').single();
+  if(error){ cache.set(key, null); return null; }
+  cache.set(key, created.id);
+  return created.id;
 }
 
 async function upsertRoster(rows){
@@ -1282,11 +1300,27 @@ async function upsertRoster(rows){
   const dedupMap = new Map();
   rows.forEach(r => dedupMap.set(r.student_id, r));
   const deduped = Array.from(dedupMap.values());
-  const sectionId = document.getElementById('importSectionSelect').value || null;
+
+  const fallbackSectionId = document.getElementById('importSectionSelect').value || null;
+  const courseId = document.getElementById('importCourseSelect').value || null;
+  const hasGroups = deduped.some(r => r.group);
+  const sectionCache = new Map();
+  let createdSections = 0;
+
+  if(hasGroups && !courseId){
+    return {ok:false, msg:'ไฟล์มีคอลัมน์หมู่เรียน แต่ยังไม่ได้เลือก "รายวิชา" ด้านบน กรุณาเลือกวิชาก่อนนำเข้า'};
+  }
+
   let success = 0;
   const failed = [];
   for(const row of deduped){
-    const { error } = await sb.from('roster').upsert({ ...row, section_id: sectionId }, { onConflict: 'owner_id,student_id' });
+    let sectionId = fallbackSectionId;
+    if(row.group && courseId){
+      const before = sectionCache.size;
+      sectionId = await resolveSectionIdForGroup(courseId, row.group, sectionCache);
+      if(sectionCache.size > before) createdSections++;
+    }
+    const { error } = await sb.from('roster').upsert({ student_id: row.student_id, name: row.name, section_id: sectionId }, { onConflict: 'owner_id,student_id' });
     if(error) failed.push({ id: row.student_id, name: row.name, err: error.message });
     else success++;
   }
@@ -1300,7 +1334,7 @@ async function upsertRoster(rows){
         failed.slice(0,5).map(f=>`${f.id} (${f.err})`).join(', ') + (failed.length>5 ? ' ...' : '')
     };
   }
-  return {ok:true, count: success, skipped};
+  return {ok:true, count: success, skipped, createdSections};
 }
 
 document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
@@ -1311,8 +1345,8 @@ document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(rows);
-  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
-  if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); }
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : '') + (res.createdSections ? ` · สร้างหมู่เรียนใหม่ ${res.createdSections} หมู่` : ''));
+  if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); renderCoursesPage(); }
 });
 
 // ===== COLUMN MAPPING (used by Excel + Google Sheets imports) =====
@@ -1345,6 +1379,7 @@ function showMappingPanel(rawRows, sourceLabel){
 
   document.getElementById('mapColId').innerHTML = optionsHtml(idCol);
   document.getElementById('mapColName').innerHTML = optionsHtml(nameCol);
+  document.getElementById('mapColSection').innerHTML = optionsHtml(-1);
 
   const previewRows = rawRows.slice(0, 5);
   document.getElementById('mapPreviewTable').innerHTML = `
@@ -1365,24 +1400,27 @@ document.getElementById('mapConfirmBtn').addEventListener('click', async ()=>{
   if(!pendingRawRows) return;
   const idCol = parseInt(document.getElementById('mapColId').value, 10);
   const nameCol = parseInt(document.getElementById('mapColName').value, 10);
+  const sectionCol = parseInt(document.getElementById('mapColSection').value, 10);
   const skipHeader = document.getElementById('mapSkipHeader').checked;
   if(idCol < 0 || nameCol < 0){ toast('กรุณาเลือกคอลัมน์รหัสนักศึกษาและชื่ออย่างน้อย'); return; }
   let rows = pendingRawRows;
   if(skipHeader) rows = rows.slice(1);
   const parsed = rows.map(r=>({
     student_id: String(r[idCol] ?? '').trim(),
-    name: String(r[nameCol] ?? '').trim()
+    name: String(r[nameCol] ?? '').trim(),
+    group: sectionCol >= 0 ? (String(r[sectionCol] ?? '').trim() || null) : null
   })).filter(r => r.student_id && r.name);
 
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(parsed);
-  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : '') + (res.createdSections ? ` · สร้างหมู่เรียนใหม่ ${res.createdSections} หมู่` : ''));
   if(res.ok){
     toast('นำเข้ารายชื่อสำเร็จ');
     document.getElementById('rosterMappingPanel').style.display = 'none';
     pendingRawRows = null;
     renderRosterPage();
+    renderCoursesPage();
   }
 });
 
