@@ -194,12 +194,25 @@
 </head>
 <body>
 
+<style>
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .auth-spinner{
+    width:34px; height:34px; margin:0 auto 16px; border-radius:50%;
+    border:3px solid var(--line); border-top-color:var(--blue); animation:spin .8s linear infinite;
+  }
+</style>
 <div id="authGate" style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;">
   <div class="card" style="max-width:380px; width:100%; text-align:center; padding:36px 28px;">
     <img src="fms-logo.png" alt="FMS logo" style="width:56px; height:56px; object-fit:contain; margin-bottom:14px;" onerror="this.style.display='none'">
     <h1 style="font-size:19px; margin-bottom:6px;">FMS Attendance</h1>
-    <p class="muted" id="authMessage" style="margin-bottom:22px;">เข้าสู่ระบบด้วยบัญชี Google มหาวิทยาลัย (@ssru.ac.th) สำหรับอาจารย์</p>
-    <button class="btn btn-primary" id="googleLoginBtn" style="width:100%;">เข้าสู่ระบบด้วย Google</button>
+    <div id="authLoading">
+      <div class="auth-spinner"></div>
+      <p class="muted">กำลังตรวจสอบสิทธิ์เข้าใช้งาน...</p>
+    </div>
+    <div id="authLoginBox" style="display:none;">
+      <p class="muted" id="authMessage" style="margin-bottom:22px;">เข้าสู่ระบบด้วยบัญชี Google มหาวิทยาลัย (@ssru.ac.th) สำหรับอาจารย์</p>
+      <button class="btn btn-primary" id="googleLoginBtn" style="width:100%;">เข้าสู่ระบบด้วย Google</button>
+    </div>
   </div>
 </div>
 
@@ -486,6 +499,8 @@ const state = { sessions: [] };
 function showLogin(msg){
   document.getElementById('authGate').style.display = 'flex';
   document.getElementById('shell').style.display = 'none';
+  document.getElementById('authLoading').style.display = 'none';
+  document.getElementById('authLoginBox').style.display = 'block';
   if(msg) document.getElementById('authMessage').textContent = msg;
 }
 async function showApp(session, profile){
@@ -631,6 +646,8 @@ function renderQr(s){
   img.width = 172; img.height = 172;
   img.alt = 'QR PIN ' + s.pin;
   img.style.borderRadius = '8px';
+  img.style.position = 'relative';
+  img.style.zIndex = '2';
   img.onerror = function(){
     holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
   };
