@@ -166,6 +166,11 @@
     font-family:'Prompt',sans-serif; font-size:13px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:var(--white); color:var(--ink);
   }
   .chip{padding:7px 14px; border-radius:20px; font-size:12.5px; font-weight:500; border:1px solid var(--line); background:var(--white); color:var(--slate); cursor:pointer;}
+  .roster-search-results{max-height:260px; overflow-y:auto; border:1.5px solid var(--line); border-radius:10px; background:var(--white);}
+  .roster-item{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--line); font-size:13.5px; color:var(--ink); transition:background .1s;}
+  .roster-item:last-child{border-bottom:none;}
+  .roster-item:hover{background:var(--blue-light);}
+  .roster-item .rid{color:var(--slate); font-family:'Courier New',monospace; font-size:12px; flex-shrink:0;}
   .chip.active{background:var(--blue); color:#fff; border-color:var(--blue);}
 
   .pct-bar{width:70px; height:6px; border-radius:4px; background:#EEF1F6; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:8px;}
