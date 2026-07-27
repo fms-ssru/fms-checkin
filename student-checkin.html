@@ -205,7 +205,7 @@ function renderConfirmStep(){
   const s = state.matchedSession;
   return `
     <div class="session-info">
-      <div class="nm">${escapeHtml(s.subject)}${s.code?' ('+escapeHtml(s.code)+')':''}</div>
+      <div class="nm">${escapeHtml(s.subject)}${s.code?' ('+escapeHtml(s.code)+')':''} · ${escapeHtml(s.sectionName||'-')}</div>
       <div class="mt">ห้อง ${escapeHtml(s.room||'-')} · ${escapeHtml(s.start)}–${escapeHtml(s.end)}</div>
     </div>
     <div class="profile-row">
@@ -409,7 +409,9 @@ async function handlePinSubmit(){
   if(pin.length !== 4){ state.pinError = 'กรอก PIN ให้ครบ 4 หลัก'; state.pinDigits = digits; render(); return; }
   const btn = document.getElementById('pinSubmitBtn');
   btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
-  const { data, error } = await sb.from('sessions').select('*').eq('status','open').eq('pin', pin).limit(1);
+  const { data, error } = await sb.from('sessions')
+    .select('*, sections(name, room, courses(code, name))')
+    .eq('status','open').eq('pin', pin).limit(1);
   btn.disabled = false; btn.textContent = 'ตรวจสอบ PIN';
   if(error || !data || !data.length){
     state.pinError = 'ไม่พบคาบเรียนที่เปิดอยู่ตรงกับ PIN นี้ ลองขอ PIN ใหม่จากอาจารย์';
@@ -418,7 +420,15 @@ async function handlePinSubmit(){
     return;
   }
   const s = data[0];
-  state.matchedSession = {...s, start: String(s.start_time).slice(0,5), end: String(s.end_time).slice(0,5)};
+  state.matchedSession = {
+    ...s,
+    start: String(s.start_time).slice(0,5),
+    end: String(s.end_time).slice(0,5),
+    subject: s.sections?.courses?.name || '(ไม่พบวิชา)',
+    code: s.sections?.courses?.code || '',
+    sectionName: s.sections?.name || '-',
+    room: s.room || s.sections?.room || '-'
+  };
   state.pinError = null;
   state.step = 'confirm';
   render();
