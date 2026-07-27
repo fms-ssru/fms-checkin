@@ -71,6 +71,7 @@
     animation:stampIn .4s cubic-bezier(.2,1.4,.4,1) forwards;
   }
   .stamp.late{border-color:var(--orange); color:var(--orange);}
+  .stamp.duplicate{border-color:var(--blue); color:var(--blue);}
   @keyframes stampIn{
     0%{transform:rotate(-8deg) scale(0.5); opacity:0;}
     60%{transform:rotate(-8deg) scale(1.1); opacity:1;}
@@ -81,6 +82,7 @@
   .status-pill{display:inline-block; margin-top:10px; padding:5px 14px; border-radius:20px; font-size:12.5px; font-weight:500;}
   .status-pill.present{background:var(--green-bg); color:var(--green);}
   .status-pill.late{background:var(--orange-bg); color:var(--orange);}
+  .status-pill.duplicate{background:var(--blue-light); color:var(--blue-dark);}
 
   .error-box{background:var(--red-bg); color:var(--red); border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; text-align:left;}
   .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:9px; font-size:13.5px; z-index:1000; max-width:90vw; text-align:center;}
@@ -162,6 +164,7 @@ function render(){
     if(state.step==='pin') inner = renderPinStep();
     else if(state.step==='confirm') inner = renderConfirmStep();
     else if(state.step==='done') inner = renderDoneStep();
+    else if(state.step==='already') inner = renderAlreadyStep();
   } else if(state.mode === 'history'){
     inner = renderHistoryStep();
   } else {
@@ -249,6 +252,18 @@ function renderDoneStep(){
       <div class="success-name">${escapeHtml(state.result.name)}</div>
       <div class="success-meta">${escapeHtml(state.result.subject)} · ${state.result.timeLabel}</div>
       <span class="status-pill ${late?'late':'present'}">${late?'บันทึกว่า มาสาย':'เช็คชื่อสำเร็จ'}</span>
+    </div>
+    <button class="btn btn-ghost" id="checkAnotherBtn" style="margin-top:18px;">เช็คชื่ออีกคาบ</button>
+  `;
+}
+
+function renderAlreadyStep(){
+  return `
+    <div class="stamp-wrap">
+      <div class="stamp duplicate">🔁</div>
+      <div class="success-name">${escapeHtml(state.result.name)}</div>
+      <div class="success-meta">${escapeHtml(state.result.subject)} · เช็คชื่อไปแล้วเมื่อ ${state.result.timeLabel}</div>
+      <span class="status-pill duplicate">เช็คชื่อไปแล้ว ไม่สามารถเช็คซ้ำได้</span>
     </div>
     <button class="btn btn-ghost" id="checkAnotherBtn" style="margin-top:18px;">เช็คชื่ออีกคาบ</button>
   `;
@@ -638,6 +653,24 @@ async function handlePinSubmit(){
     return;
   }
 
+  // เช็คว่าเคยเช็คชื่อคาบนี้ไปแล้วหรือยัง (เตือนทันทีตั้งแต่ตรงนี้ ไม่ต้องรอผ่าน GPS/ยืนยันก่อน)
+  const { data: already } = await sb.from('attendance')
+    .select('*')
+    .eq('session_id', s.id)
+    .eq('student_email', state.profile.email)
+    .limit(1);
+  if(already && already.length){
+    state.step = 'already';
+    state.result = {
+      name: state.profile.name,
+      subject: s.sections?.courses?.name || '(ไม่พบวิชา)',
+      timeLabel: fmtTime(already[0].checked_at),
+      status: already[0].status
+    };
+    render();
+    return;
+  }
+
   state.matchedSession = {
     ...s,
     start: String(s.start_time).slice(0,5),
@@ -707,8 +740,8 @@ async function handleConfirmSubmit(){
     if(error.code === '23505'){
       const { data: existing } = await sb.from('attendance').select('*').eq('session_id', s.id).eq('student_email', state.profile.email).single();
       btn.disabled = false; btn.textContent = 'ยืนยันเช็คชื่อ';
-      state.step = 'done';
-      state.result = { name: state.profile.name, subject: s.subject, timeLabel: 'เช็คไปแล้วเมื่อ '+fmtTime(existing.checked_at), status: existing.status };
+      state.step = 'already';
+      state.result = { name: state.profile.name, subject: s.subject, timeLabel: fmtTime(existing.checked_at), status: existing.status };
       render();
       return;
     }
