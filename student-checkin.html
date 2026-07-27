@@ -372,9 +372,10 @@ function bindEvents(){
 }
 
 async function loadMyCourses(){
-  const { data, error } = await sb.from('enrollments')
+  const { data, error } = await sb.from('roster')
     .select('section_id, sections(course_id, courses(id, code, name))')
-    .eq('student_id', state.profile.student_id);
+    .eq('student_id', state.profile.student_id)
+    .not('section_id', 'is', null);
   if(error){ state.myCourses = []; return; }
   const seen = new Map();
   (data||[]).forEach(e=>{

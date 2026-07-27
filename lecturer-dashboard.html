@@ -369,20 +369,20 @@
 
     <!-- STUDENTS -->
     <section class="page" id="page-students">
-      <div class="topbar"><div><h1>จัดการรายชื่อนักศึกษา</h1><div class="sub" id="rosterCountLabel">กำลังโหลด…</div></div></div>
+      <div class="topbar"><div><h1>รายชื่อนักศึกษาของฉัน</h1><div class="sub" id="rosterCountLabel">กำลังโหลด…</div></div></div>
 
       <div class="card" style="margin-bottom:18px;">
-        <h2 style="font-size:14px; margin-bottom:12px;">ลงทะเบียนเข้าหมู่เรียนอัตโนมัติ (ไม่บังคับ)</h2>
-        <p class="muted" style="margin-bottom:10px;">เลือกหมู่เรียนไว้ก่อน แล้วนำเข้ารายชื่อด้วยวิธีไหนก็ได้ด้านล่าง ระบบจะลงทะเบียนเข้าหมู่นี้ให้อัตโนมัติทันที (ถ้าไม่เลือก จะแค่เพิ่มเข้าทำเนียบกลาง ต้องไปลงทะเบียนเองทีหลัง)</p>
+        <h2 style="font-size:14px; margin-bottom:12px;">เลือกหมู่เรียนที่จะเพิ่มเข้า (ไม่บังคับ)</h2>
+        <p class="muted" style="margin-bottom:10px;">เลือกไว้ก่อน แล้วนำเข้ารายชื่อด้วยวิธีไหนก็ได้ด้านล่าง ทุกคนจะถูกใส่เข้าหมู่นี้ให้อัตโนมัติ</p>
         <div class="filter-bar" style="margin-bottom:0;">
-          <select id="importCourseSelect"><option value="">ไม่ลงทะเบียน (แค่เพิ่มทำเนียบกลาง)</option></select>
+          <select id="importCourseSelect"><option value="">ไม่ระบุหมู่เรียน</option></select>
           <select id="importSectionSelect"><option value="">เลือกหมู่เรียน</option></select>
         </div>
       </div>
 
       <div class="card" style="margin-bottom:18px;">
         <h2 style="font-size:14px; margin-bottom:12px;">1) วางรายชื่อด้วยมือ</h2>
-        <p class="muted" style="margin-bottom:10px;">รูปแบบ: <code>รหัสนักศึกษา,ชื่อ-นามสกุล</code> บรรทัดละ 1 คน (ทำเนียบกลาง — ลงทะเบียนเข้าหมู่เรียนแยกด้านล่าง)</p>
+        <p class="muted" style="margin-bottom:10px;">รูปแบบ: <code>รหัสนักศึกษา,ชื่อ-นามสกุล</code> บรรทัดละ 1 คน</p>
         <textarea id="rosterPasteText" rows="5" style="width:100%; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);" placeholder="6512345,สมชาย ใจดี&#10;6512346,สมหญิง รักเรียน"></textarea>
         <button class="btn btn-primary" id="importPasteBtn" style="margin-top:10px;">นำเข้า/อัปเดตรายชื่อ</button>
 
@@ -437,6 +437,11 @@
           <input type="text" id="addStudentId" placeholder="รหัสนักศึกษา" style="flex:1; min-width:140px;">
           <input type="text" id="addStudentName" placeholder="ชื่อ-นามสกุล" style="flex:1; min-width:160px;">
         </div>
+        <div class="filter-bar" style="margin-bottom:10px;">
+          <select id="addCourseSelect"><option value="">ไม่ระบุหมู่เรียน</option></select>
+          <select id="addSectionSelect"><option value="">เลือกหมู่เรียน</option></select>
+        </div>
+        <p class="muted" style="margin-bottom:10px;">ใส่รหัสของคนที่เพิ่มไว้แล้วอีกครั้ง + เลือกหมู่เรียนใหม่ เพื่อ "ย้ายหมู่" ได้เลย</p>
         <div style="display:flex; gap:8px;">
           <button class="btn btn-primary btn-sm" id="rosterAddSaveBtn">บันทึก</button>
           <button class="btn btn-ghost btn-sm" id="rosterAddCancelBtn">ยกเลิก</button>
@@ -445,27 +450,7 @@
       <div class="card" style="padding:8px 0;">
         <div id="rosterTableWrap"><div class="empty-note">กำลังโหลด...</div></div>
       </div>
-      <div class="sub" style="margin-top:10px; margin-bottom:24px;">แสดงเฉพาะนักศึกษาที่ลงทะเบียนในหมู่เรียนของฉันเท่านั้น (ทำเนียบกลางเป็นข้อมูลรวมของทุกอาจารย์) ดู % เข้าเรียนแยกตามวิชาได้ที่หน้า "สรุปการเข้าเรียน"</div>
-
-      <div class="section-title"><h2>จัดการการลงทะเบียนเข้าหมู่เรียน</h2></div>
-      <div class="card" style="margin-bottom:14px;">
-        <div class="filter-bar" style="margin-bottom:0;">
-          <select id="enrollCourseSelect"><option value="">เลือกรายวิชา</option></select>
-          <select id="enrollSectionSelect"><option value="">เลือกหมู่เรียน</option></select>
-        </div>
-      </div>
-      <div id="enrollmentPanel" style="display:none;">
-        <div class="card" style="margin-bottom:14px;">
-          <h2 style="font-size:13px; margin-bottom:10px;">เพิ่มนักศึกษาเข้าหมู่เรียนนี้</h2>
-          <div class="filter-bar" style="margin-bottom:0;">
-            <input type="text" id="enrollSearchBox" placeholder="ค้นหาชื่อ/รหัส จากทำเนียบกลาง" style="flex:1; min-width:220px;">
-          </div>
-          <div id="enrollSearchResults" class="roster-search-results" style="margin-top:8px; display:none;"></div>
-        </div>
-        <div class="card" style="padding:8px 0;">
-          <div id="enrolledListWrap"><div class="empty-note">เลือกหมู่เรียนด้านบน</div></div>
-        </div>
-      </div>
+      <div class="sub" style="margin-top:10px; margin-bottom:24px;">รายชื่อนี้เป็นของคุณคนเดียวเท่านั้น อาจารย์คนอื่นมองไม่เห็น</div>
     </section>
 
     <!-- LEAVE APPROVAL -->
@@ -683,14 +668,14 @@ async function viewSessionDetail(id, evt){
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
 
   const [{data: enrolled}, {data: attendance}] = await Promise.all([
-    sb.from('enrollments').select('student_id, roster(name)').eq('section_id', s.section_id),
+    sb.from('roster').select('student_id, name').eq('section_id', s.section_id),
     sb.from('attendance').select('*').eq('session_id', id)
   ]);
   const attByStudent = {};
   (attendance||[]).forEach(a=>{ attByStudent[a.student_id] = a; });
   const rows = (enrolled||[]).map(e=>{
     const att = attByStudent[e.student_id];
-    return { student_id: e.student_id, name: e.roster?.name || att?.student_name || '(ไม่ทราบชื่อ)', status: att?.status || 'ขาด', time: att?.checked_at || null };
+    return { student_id: e.student_id, name: e.name || att?.student_name || '(ไม่ทราบชื่อ)', status: att?.status || 'ขาด', time: att?.checked_at || null };
   }).sort((a,b)=> a.name.localeCompare(b.name,'th'));
   const present = rows.filter(r=>r.status==='มา'||r.status==='สาย').length;
   const pct = rows.length ? Math.round((present/rows.length)*100) : 0;
@@ -748,7 +733,7 @@ async function renderCoursesPage(){
   wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
   const { data: courses } = await sb.from('courses').select('*').order('code');
   const { data: sections } = await sb.from('sections').select('*').order('name');
-  const { data: enrollCounts } = await sb.from('enrollments').select('section_id');
+  const { data: enrollCounts } = await sb.from('roster').select('section_id').not('section_id', 'is', null);
   const countBySection = {};
   (enrollCounts||[]).forEach(e=>{ countBySection[e.section_id] = (countBySection[e.section_id]||0)+1; });
 
@@ -1055,39 +1040,37 @@ document.querySelectorAll('[data-leave-filter]').forEach(chip=>{
 });
 document.getElementById('leaveRefreshBtn').addEventListener('click', renderLeavePage);
 
-// ===== ROSTER =====
+// ===== ROSTER (owner-scoped, section is a direct field) =====
 let rosterData = [];
 let rosterSearch = '';
-let allRosterData = []; // full shared directory, used for "add to section" search only
 
 async function renderRosterPage(){
   const wrap = document.getElementById('rosterTableWrap');
   wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
 
-  const [{data: allRoster}, {data: myEnrollments, error: eErr}, {data: attendance}] = await Promise.all([
+  const [{data: myRoster, error: rErr}, {data: sections}, {data: attendance}] = await Promise.all([
     sb.from('roster').select('*').order('name'),
-    sb.from('enrollments').select('student_id, roster(name)'),
+    sb.from('sections').select('id, name, courses(code)'),
     sb.from('attendance').select('student_id,status')
   ]);
-  allRosterData = allRoster || [];
+  if(rErr){ wrap.innerHTML = '<div class="empty-note">โหลดรายชื่อไม่สำเร็จ</div>'; return; }
 
-  if(eErr){ wrap.innerHTML = '<div class="empty-note">โหลดรายชื่อไม่สำเร็จ</div>'; return; }
-  const myStudentIds = new Map();
-  (myEnrollments||[]).forEach(e=>{ if(!myStudentIds.has(e.student_id)) myStudentIds.set(e.student_id, e.roster?.name || '(ไม่ทราบชื่อ)'); });
+  const sectionLabel = {};
+  (sections||[]).forEach(s=>{ sectionLabel[s.id] = `${s.courses?.code || '?'} ${s.name}`; });
 
   const totalSessions = (await sb.from('sessions').select('id')).data?.length || 0;
   const attCount = {};
   (attendance||[]).forEach(a=>{ if(a.student_id) attCount[a.student_id] = (attCount[a.student_id]||0) + 1; });
 
-  rosterData = Array.from(myStudentIds.entries()).map(([student_id, name])=>{
-    const cnt = attCount[student_id] || 0;
+  rosterData = (myRoster||[]).map(r=>{
+    const cnt = attCount[r.student_id] || 0;
     const pct = totalSessions ? Math.round((cnt/totalSessions)*100) : null;
-    return { student_id, name, attCount: cnt, pct };
+    return { ...r, sectionLabel: r.section_id ? (sectionLabel[r.section_id] || '?') : null, attCount: cnt, pct };
   }).sort((a,b)=>a.name.localeCompare(b.name,'th'));
 
-  document.getElementById('rosterCountLabel').textContent = `นักศึกษาในวิชาของฉัน ${rosterData.length} คน (จากทำเนียบกลาง ${allRosterData.length} คน)`;
+  document.getElementById('rosterCountLabel').textContent = `นักศึกษาของฉันทั้งหมด ${rosterData.length} คน`;
   renderRosterTable();
-  populateEnrollDropdowns();
+  populateImportDropdowns();
 }
 
 let editingRosterId = null;
@@ -1096,10 +1079,10 @@ function renderRosterTable(){
   const wrap = document.getElementById('rosterTableWrap');
   const q = rosterSearch.trim().toLowerCase();
   const rows = rosterData.filter(r => !q || r.name.toLowerCase().includes(q) || r.student_id.toLowerCase().includes(q));
-  if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบรายชื่อ — ลองนำเข้ารายชื่อด้านบน</div>'; return; }
+  if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบรายชื่อ — เพิ่มด้านบนได้เลย</div>'; return; }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>นักศึกษา</th><th>เช็คชื่อแล้ว (รวมทุกวิชา)</th><th></th></tr></thead>
+      <thead><tr><th>นักศึกษา</th><th>หมู่เรียน</th><th>เช็คชื่อแล้ว</th><th></th></tr></thead>
       <tbody>${rows.map(r=>{
         if(r.student_id === editingRosterId){
           return `<tr>
@@ -1107,7 +1090,7 @@ function renderRosterTable(){
               <span class="muted" style="margin-right:8px;">${escapeHtml(r.student_id)}</span>
               <input type="text" class="edit-name" value="${escapeAttr(r.name)}" style="width:180px; padding:6px 8px; border-radius:6px; border:1px solid var(--line);">
             </td>
-            <td style="white-space:nowrap;">
+            <td colspan="2" style="white-space:nowrap;">
               <button class="btn btn-primary btn-sm" data-save="${escapeAttr(r.student_id)}">บันทึก</button>
               <button class="btn btn-ghost btn-sm" data-cancel="1">ยกเลิก</button>
             </td>
@@ -1115,6 +1098,7 @@ function renderRosterTable(){
         }
         return `<tr>
           <td><div class="person"><div class="init">${initials(r.name)}</div>${escapeHtml(r.name)} · ${escapeHtml(r.student_id)}</div></td>
+          <td>${r.sectionLabel ? `<span class="badge badge-blue">${escapeHtml(r.sectionLabel)}</span>` : '-'}</td>
           <td>${r.attCount}</td>
           <td style="white-space:nowrap;">
             <button class="btn btn-ghost btn-sm" data-edit="${escapeAttr(r.student_id)}">แก้ไข</button>
@@ -1139,19 +1123,17 @@ function renderRosterTable(){
       btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
       const { error } = await sb.from('roster').update({ name: newName }).eq('student_id', id);
       if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); btn.disabled=false; btn.textContent='บันทึก'; return; }
-      toast('บันทึกแล้ว (แก้ในทำเนียบกลาง มีผลกับทุกอาจารย์)');
+      toast('บันทึกแล้ว');
       editingRosterId = null;
       renderRosterPage();
     };
   });
   wrap.querySelectorAll('[data-del]').forEach(btn=>{
     btn.onclick = async ()=>{
-      if(!confirm(`นำ ${btn.dataset.del} ออกจากทุกหมู่เรียนของฉัน? (ไม่ได้ลบออกจากทำเนียบกลาง แค่เอาออกจากวิชาที่ฉันสอน)`)) return;
-      const { data: mySections } = await sb.from('sections').select('id, courses!inner(owner_id)');
-      const mySectionIds = (mySections||[]).map(s=>s.id);
-      const { error } = await sb.from('enrollments').delete().eq('student_id', btn.dataset.del).in('section_id', mySectionIds);
+      if(!confirm(`ยืนยันลบ ${btn.dataset.del} ออกจากรายชื่อของฉัน?`)) return;
+      const { error } = await sb.from('roster').delete().eq('student_id', btn.dataset.del);
       if(error){ toast('ลบไม่สำเร็จ: ' + error.message); return; }
-      toast('นำออกจากวิชาของฉันแล้ว');
+      toast('ลบแล้ว');
       renderRosterPage();
       renderCoursesPage();
     };
@@ -1165,19 +1147,24 @@ document.getElementById('rosterAddBtn').addEventListener('click', ()=>{
 document.getElementById('rosterAddCancelBtn').addEventListener('click', ()=>{
   document.getElementById('rosterAddForm').style.display = 'none';
   ['addStudentId','addStudentName'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('addCourseSelect').value = '';
+  document.getElementById('addSectionSelect').innerHTML = '<option value="">เลือกหมู่เรียน</option>';
 });
 document.getElementById('rosterAddSaveBtn').addEventListener('click', async ()=>{
   const id = document.getElementById('addStudentId').value.trim();
   const name = document.getElementById('addStudentName').value.trim();
+  const sectionId = document.getElementById('addSectionSelect').value || null;
   if(!id || !name){ toast('กรุณากรอกรหัสนักศึกษาและชื่อ'); return; }
   const btn = document.getElementById('rosterAddSaveBtn');
   btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
-  const { error } = await sb.from('roster').upsert({ student_id:id, name }, { onConflict:'student_id' });
+  const { error } = await sb.from('roster').upsert({ student_id:id, name, section_id: sectionId }, { onConflict:'owner_id,student_id' });
   btn.disabled = false; btn.textContent = 'บันทึก';
   if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
-  toast('เพิ่มนักศึกษาแล้ว');
+  toast(sectionId ? 'เพิ่ม/ย้ายนักศึกษาเข้าหมู่เรียนแล้ว' : 'เพิ่มนักศึกษาแล้ว');
   document.getElementById('rosterAddForm').style.display = 'none';
   ['addStudentId','addStudentName'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('addCourseSelect').value = '';
+  document.getElementById('addSectionSelect').innerHTML = '<option value="">เลือกหมู่เรียน</option>';
   renderRosterPage();
 });
 
@@ -1186,16 +1173,12 @@ document.getElementById('rosterSearchBox').addEventListener('input', (e)=>{
   renderRosterTable();
 });
 
-// ---- Enrollment management ----
-let currentEnrollSectionId = null;
-
-async function populateEnrollDropdowns(){
-  const sel = document.getElementById('enrollCourseSelect');
+async function populateImportDropdowns(){
   const { data: courses } = await sb.from('courses').select('*').order('code');
-  sel.innerHTML = '<option value="">เลือกรายวิชา</option>' + (courses||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.code)} - ${escapeHtml(c.name)}</option>`).join('');
-
   const importSel = document.getElementById('importCourseSelect');
-  importSel.innerHTML = '<option value="">ไม่ลงทะเบียน (แค่เพิ่มทำเนียบกลาง)</option>' + (courses||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.code)} - ${escapeHtml(c.name)}</option>`).join('');
+  importSel.innerHTML = '<option value="">ไม่ระบุหมู่เรียน</option>' + (courses||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.code)} - ${escapeHtml(c.name)}</option>`).join('');
+  const addSel = document.getElementById('addCourseSelect');
+  addSel.innerHTML = '<option value="">ไม่ระบุหมู่เรียน</option>' + (courses||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.code)} - ${escapeHtml(c.name)}</option>`).join('');
 }
 document.getElementById('importCourseSelect').addEventListener('change', async (e)=>{
   const sectionSel = document.getElementById('importSectionSelect');
@@ -1204,76 +1187,17 @@ document.getElementById('importCourseSelect').addEventListener('change', async (
   const { data: sections } = await sb.from('sections').select('*').eq('course_id', e.target.value).order('name');
   sectionSel.innerHTML += (sections||[]).map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
 });
-document.getElementById('enrollCourseSelect').addEventListener('change', async (e)=>{
-  const sectionSel = document.getElementById('enrollSectionSelect');
+document.getElementById('addCourseSelect').addEventListener('change', async (e)=>{
+  const sectionSel = document.getElementById('addSectionSelect');
   sectionSel.innerHTML = '<option value="">เลือกหมู่เรียน</option>';
-  document.getElementById('enrollmentPanel').style.display = 'none';
-  currentEnrollSectionId = null;
   if(!e.target.value) return;
   const { data: sections } = await sb.from('sections').select('*').eq('course_id', e.target.value).order('name');
   sectionSel.innerHTML += (sections||[]).map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
 });
-document.getElementById('enrollSectionSelect').addEventListener('change', (e)=>{
-  currentEnrollSectionId = e.target.value || null;
-  if(currentEnrollSectionId){
-    document.getElementById('enrollmentPanel').style.display = 'block';
-    loadEnrolledList();
-  } else {
-    document.getElementById('enrollmentPanel').style.display = 'none';
-  }
-});
 
-async function loadEnrolledList(){
-  const wrap = document.getElementById('enrolledListWrap');
-  wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
-  const { data } = await sb.from('enrollments').select('student_id, roster(name)').eq('section_id', currentEnrollSectionId);
-  const rows = (data||[]).map(e=>({student_id:e.student_id, name: e.roster?.name || '(ไม่ทราบชื่อ)'})).sort((a,b)=>a.name.localeCompare(b.name,'th'));
-  if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ยังไม่มีนักศึกษาลงทะเบียนหมู่นี้</div>'; return; }
-  wrap.innerHTML = `
-    <table>
-      <thead><tr><th>นักศึกษา</th><th></th></tr></thead>
-      <tbody>${rows.map(r=>`
-        <tr>
-          <td><div class="person"><div class="init">${initials(r.name)}</div>${escapeHtml(r.name)} · ${escapeHtml(r.student_id)}</div></td>
-          <td><button class="btn btn-ghost btn-sm" data-unenroll="${escapeAttr(r.student_id)}" style="color:var(--red); border-color:var(--red);">นำออก</button></td>
-        </tr>`).join('')}</tbody>
-    </table>`;
-  wrap.querySelectorAll('[data-unenroll]').forEach(btn=>{
-    btn.onclick = async ()=>{
-      await sb.from('enrollments').delete().eq('section_id', currentEnrollSectionId).eq('student_id', btn.dataset.unenroll);
-      toast('นำออกจากหมู่เรียนแล้ว');
-      loadEnrolledList();
-      renderCoursesPage();
-    };
-  });
-}
-
-document.getElementById('enrollSearchBox').addEventListener('input', (e)=>{
-  const q = e.target.value.trim().toLowerCase();
-  const results = document.getElementById('enrollSearchResults');
-  if(!q){ results.style.display = 'none'; results.innerHTML=''; return; }
-  const matches = allRosterData.filter(r => r.name.toLowerCase().includes(q) || r.student_id.toLowerCase().includes(q)).slice(0, 20);
-  results.style.display = 'block';
-  results.innerHTML = matches.length ? matches.map(r=>`
-    <div class="roster-item" data-enroll-pick="${escapeAttr(r.student_id)}">
-      <span>${escapeHtml(r.name)}</span><span class="rid">${escapeHtml(r.student_id)}</span>
-    </div>`).join('') : '<div class="roster-item">ไม่พบ</div>';
-  results.querySelectorAll('[data-enroll-pick]').forEach(item=>{
-    item.onclick = async ()=>{
-      const { error } = await sb.from('enrollments').insert({ section_id: currentEnrollSectionId, student_id: item.dataset.enrollPick });
-      if(error){ toast(error.code==='23505' ? 'มีอยู่ในหมู่เรียนนี้แล้ว' : 'เพิ่มไม่สำเร็จ: '+error.message); return; }
-      toast('เพิ่มเข้าหมู่เรียนแล้ว');
-      document.getElementById('enrollSearchBox').value = '';
-      results.style.display = 'none';
-      loadEnrolledList();
-      renderCoursesPage();
-    };
-  });
-});
 document.getElementById('rosterRefreshBtn').addEventListener('click', renderRosterPage);
 
 function parseRosterRows(rawRows){
-  // rawRows: array of arrays [id, name] using fixed column order (used by the plain-paste box only)
   const out = [];
   for(const row of rawRows){
     const id = String(row[0] ?? '').trim();
@@ -1289,38 +1213,27 @@ function parseRosterRows(rawRows){
 async function upsertRoster(rows){
   if(!rows.length){ return {ok:false, msg:'ไม่พบข้อมูลที่ถูกต้อง'}; }
   const dedupMap = new Map();
-  rows.forEach(r => dedupMap.set(r.student_id, r)); // เก็บรายการล่าสุดถ้ารหัสซ้ำ
+  rows.forEach(r => dedupMap.set(r.student_id, r));
   const deduped = Array.from(dedupMap.values());
+  const sectionId = document.getElementById('importSectionSelect').value || null;
   let success = 0;
   const failed = [];
-  const successIds = [];
   for(const row of deduped){
-    const { error } = await sb.from('roster').upsert(row, { onConflict: 'student_id' });
+    const { error } = await sb.from('roster').upsert({ ...row, section_id: sectionId }, { onConflict: 'owner_id,student_id' });
     if(error) failed.push({ id: row.student_id, name: row.name, err: error.message });
-    else { success++; successIds.push(row.student_id); }
+    else success++;
   }
   const skipped = rows.length - deduped.length;
-
-  // ลงทะเบียนเข้าหมู่เรียนอัตโนมัติถ้าเลือกไว้
-  const sectionId = document.getElementById('importSectionSelect').value;
-  let enrolledCount = 0;
-  if(sectionId && successIds.length){
-    const enrollRows = successIds.map(sid => ({ section_id: sectionId, student_id: sid }));
-    const { error: enrollErr } = await sb.from('enrollments').upsert(enrollRows, { onConflict: 'section_id,student_id' });
-    if(!enrollErr) enrolledCount = successIds.length;
-  }
-
   if(failed.length){
     return {
       ok: success > 0,
       count: success,
       skipped,
-      enrolledCount,
       msg: `บันทึกสำเร็จ ${success} คน แต่มี ${failed.length} คนบันทึกไม่ผ่าน: ` +
         failed.slice(0,5).map(f=>`${f.id} (${f.err})`).join(', ') + (failed.length>5 ? ' ...' : '')
     };
   }
-  return {ok:true, count: success, skipped, enrolledCount};
+  return {ok:true, count: success, skipped};
 }
 
 document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
@@ -1331,7 +1244,7 @@ document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(rows);
-  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : '') + (res.enrolledCount ? ` · ลงทะเบียนเข้าหมู่เรียนแล้ว ${res.enrolledCount} คน` : ''));
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
   if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); }
 });
 
@@ -1397,7 +1310,7 @@ document.getElementById('mapConfirmBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(parsed);
-  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : '') + (res.enrolledCount ? ` · ลงทะเบียนเข้าหมู่เรียนแล้ว ${res.enrolledCount} คน` : ''));
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
   if(res.ok){
     toast('นำเข้ารายชื่อสำเร็จ');
     document.getElementById('rosterMappingPanel').style.display = 'none';
@@ -1425,8 +1338,6 @@ document.getElementById('rosterExcelInput').addEventListener('change', async (e)
 });
 
 function parseCSV(text){
-  // Proper CSV parser: handles quoted fields (with embedded commas/newlines) correctly,
-  // unlike a naive split(',') which breaks whenever a cell contains a comma.
   const rows = [];
   let row = [], field = '', inQuotes = false;
   for(let i=0; i<text.length; i++){
@@ -1457,7 +1368,7 @@ document.getElementById('importSheetBtn').addEventListener('click', async ()=>{
     const res = await fetch(url);
     if(!res.ok) throw new Error('โหลดลิงก์ไม่สำเร็จ (สถานะ ' + res.status + ')');
     const buf = await res.arrayBuffer();
-    const text = new TextDecoder('utf-8').decode(buf); // บังคับอ่านเป็น UTF-8 กันข้อความไทยเพี้ยน
+    const text = new TextDecoder('utf-8').decode(buf);
     const rawRows = parseCSV(text);
     if(!rawRows.length){ status.textContent = 'ไม่พบข้อมูลจากลิงก์นี้'; return; }
     showMappingPanel(rawRows, 'Google Sheets');
@@ -1537,14 +1448,14 @@ async function renderReportsPage(){
   (sessions||[]).forEach(s=>{ (sessionsBySections[s.section_id] = sessionsBySections[s.section_id]||[]).push(s); });
   const sessionIds = (sessions||[]).map(s=>s.id);
 
-  const { data: enrollments } = await sb.from('enrollments').select('student_id, section_id, roster(name)').in('section_id', sectionIds);
+  const { data: enrollments } = await sb.from('roster').select('student_id, section_id, name').in('section_id', sectionIds);
   const { data: attendance } = sessionIds.length ? await sb.from('attendance').select('session_id,student_id,status').in('session_id', sessionIds) : {data:[]};
 
   const rowsMap = new Map(); // student_id -> row
   (enrollments||[]).forEach(e=>{
     const secSessions = sessionsBySections[e.section_id] || [];
     if(!rowsMap.has(e.student_id)){
-      rowsMap.set(e.student_id, { student_id: e.student_id, name: e.roster?.name || '(ไม่ทราบชื่อ)', totalSessions: 0, 'มา':0,'สาย':0,'ลา':0,'ขาด':0 });
+      rowsMap.set(e.student_id, { student_id: e.student_id, name: e.name || '(ไม่ทราบชื่อ)', totalSessions: 0, 'มา':0,'สาย':0,'ลา':0,'ขาด':0 });
     }
     rowsMap.get(e.student_id).totalSessions += secSessions.length;
   });
@@ -1691,7 +1602,7 @@ async function renderStatsPage(){
 
   const { data: allCourses } = await sb.from('courses').select('*');
   const { data: allSections } = await sb.from('sections').select('*');
-  const { data: allEnrollments } = await sb.from('enrollments').select('section_id, student_id');
+  const { data: allEnrollments } = await sb.from('roster').select('section_id, student_id').not('section_id', 'is', null);
   const { data: allSessions } = await sb.from('sessions').select('id, section_id, date').order('date');
   const { data: allAttendance } = await sb.from('attendance').select('session_id, student_id, status');
 
