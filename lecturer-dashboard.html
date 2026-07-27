@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -153,10 +154,9 @@
   .status-select{font-family:'Prompt',sans-serif; font-size:12px; padding:5px 8px; border-radius:8px; border:1px solid var(--line); background:var(--white); color:var(--ink);}
 
   .qr-panel{display:flex; flex-direction:column; align-items:center; gap:14px;}
-  .qr-box{width:200px; height:200px; border-radius:16px; background:repeating-linear-gradient(45deg,#0F172A 0 8px,#fff 8px 16px); position:relative; overflow:hidden;}
-  .qr-box::after{content:""; position:absolute; inset:14px; background:#fff; border-radius:10px; z-index:1;}
-  .qr-box .qc{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Kanit',sans-serif; font-weight:600; color:var(--blue); font-size:13px; z-index:2;}
-  #qrHolder{position:relative; z-index:2; display:flex; align-items:center; justify-content:center; width:100%; height:100%;}
+  .qr-box{width:200px; height:200px; border-radius:16px; background:repeating-linear-gradient(45deg,#0F172A 0 8px,#fff 8px 16px); display:flex; align-items:center; justify-content:center; padding:14px; box-sizing:border-box;}
+  .qr-box .qr-inner{width:100%; height:100%; background:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center; overflow:hidden;}
+  .qr-box .qc{font-family:'Kanit',sans-serif; font-weight:600; color:var(--blue); font-size:13px;}
   .countdown{font-family:'Kanit',sans-serif; font-size:26px; font-weight:600; color:var(--blue);}
   .pin-display{display:flex; gap:8px;}
   .pin-digit{width:38px; height:46px; background:var(--blue-light); border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:'Kanit',sans-serif; font-size:20px; font-weight:600; color:var(--blue-dark);}
@@ -290,7 +290,7 @@
       <div id="liveEmptyState" class="card" style="display:none;"><div class="empty-note">ยังไม่มีคาบเรียนที่เปิดอยู่ — ไปที่ Dashboard เพื่อเปิดเช็คชื่อก่อนครับ</div></div>
       <div class="grid-2" style="align-items:start;" id="liveContent">
         <div class="glass-card qr-panel">
-          <div id="qrHolder" class="qr-box"><div class="qc">QR</div></div>
+          <div class="qr-box"><div id="qrHolder" class="qr-inner"><div class="qc">QR</div></div></div>
           <div class="countdown" id="qrCountdown">00:20</div>
           <div class="sub" style="text-align:center;">QR เปลี่ยนอัตโนมัติทุก 20 วินาที เพื่อป้องกันการนำไปใช้ซ้ำ</div>
           <button class="btn btn-outline" id="refreshQrBtn">↻ รีเฟรช QR ทันที</button>
@@ -311,7 +311,7 @@
     </section>
 
     <div class="card" style="margin-bottom:18px; border-color:var(--orange); background:var(--orange-bg);" id="phaseNote">
-      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 2 หน้า (Dashboard และ เช็คชื่อ Real-time) ส่วนอีก 4 เมนูด้านล่างยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 3 หน้า (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ) ส่วนอีก 3 เมนูด้านล่างยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
     </div>
 
     <!-- STATS DASHBOARD -->
@@ -339,53 +339,38 @@
 
     <!-- STUDENTS -->
     <section class="page" id="page-students">
-      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
-      <div class="topbar"><div><h1>จัดการรายชื่อนักศึกษา</h1><div class="sub">การตลาดดิจิทัล (MK214) · 78 คน</div></div></div>
+      <div class="topbar"><div><h1>จัดการรายชื่อนักศึกษา</h1><div class="sub" id="rosterCountLabel">กำลังโหลด…</div></div></div>
 
       <div class="card" style="margin-bottom:18px;">
-        <div class="section-title" style="margin-top:0;"><h2>นำเข้า / ซิงค์รายชื่อนักศึกษา</h2><span class="badge badge-green">✓ ซิงค์ล่าสุด 24 ก.ค. 08:12</span></div>
-        <div class="grid-2">
-          <div style="display:flex; gap:14px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:14px;">
-            <div class="stat-card ic" style="width:44px; height:44px; border-radius:12px; background:var(--green-bg); color:var(--green); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">⊞</div>
-            <div style="flex:1;">
-              <div style="font-weight:500; font-size:14px;">Google Sheets</div>
-              <div class="sub" style="margin-top:2px;">เชื่อมต่อแล้ว · sheet "รายชื่อ MK214 - 2569S1"</div>
-            </div>
-            <button class="btn btn-outline">ซิงค์ตอนนี้</button>
-          </div>
-          <div style="display:flex; gap:14px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:14px;">
-            <div class="ic" style="width:44px; height:44px; border-radius:12px; background:var(--blue-light); color:var(--blue-dark); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">⇧</div>
-            <div style="flex:1;">
-              <div style="font-weight:500; font-size:14px;">อัปโหลดไฟล์ Excel</div>
-              <div class="sub" style="margin-top:2px;">รองรับไฟล์ .xlsx</div>
-            </div>
-            <button class="btn btn-primary">เลือกไฟล์</button>
-          </div>
+        <h2 style="font-size:14px; margin-bottom:12px;">1) วางรายชื่อด้วยมือ</h2>
+        <p class="muted" style="margin-bottom:10px;">รูปแบบ: <code>รหัสนักศึกษา,ชื่อ-นามสกุล,กลุ่มเรียน</code> บรรทัดละ 1 คน (กลุ่มเรียนใส่หรือไม่ใส่ก็ได้)</p>
+        <textarea id="rosterPasteText" rows="5" style="width:100%; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);" placeholder="6512345,สมชาย ใจดี,MK-A&#10;6512346,สมหญิง รักเรียน,MK-B"></textarea>
+        <button class="btn btn-primary" id="importPasteBtn" style="margin-top:10px;">นำเข้า/อัปเดตรายชื่อ</button>
+
+        <hr class="divider">
+        <h2 style="font-size:14px; margin-bottom:12px;">2) อัปโหลดไฟล์ Excel (.xlsx)</h2>
+        <p class="muted" style="margin-bottom:10px;">คอลัมน์ A=รหัสนักศึกษา, B=ชื่อ-นามสกุล, C=กลุ่มเรียน (แถวแรกเป็นหัวตารางก็ได้ ระบบจะข้ามให้อัตโนมัติถ้ารหัสไม่ใช่ตัวเลข)</p>
+        <input type="file" id="rosterExcelInput" accept=".xlsx,.xls">
+
+        <hr class="divider">
+        <h2 style="font-size:14px; margin-bottom:12px;">3) ดึงจาก Google Sheets</h2>
+        <p class="muted" style="margin-bottom:10px;">ใน Google Sheets: File → Share → Publish to web → เลือกชีต → Comma-separated values (.csv) → วางลิงก์ที่ได้ตรงนี้</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="rosterSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" style="flex:1; min-width:220px; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);">
+          <button class="btn btn-outline" id="importSheetBtn">ดึงข้อมูล</button>
         </div>
-        <div class="sub" style="margin-top:14px;">คอลัมน์ที่ซิงค์: <span class="badge badge-blue">รหัสนักศึกษา</span> <span class="badge badge-blue">ชื่อ</span> <span class="badge badge-blue">หมู่เรียน</span> <span class="badge badge-blue">รายวิชา</span></div>
+
+        <div id="rosterImportStatus" class="muted" style="margin-top:12px;"></div>
       </div>
 
       <div class="filter-bar">
-        <div class="search-box" style="flex:1; min-width:220px;"><span>⌕</span><span style="font-size:13px; color:var(--slate-light);">ค้นหาชื่อหรือรหัสนักศึกษา</span></div>
-        <div class="chip active">ทั้งหมด</div>
-        <div class="chip">มา</div>
-        <div class="chip">สาย</div>
-        <div class="chip">ขาด</div>
-        <div class="chip">ลา</div>
+        <div class="search-box" style="flex:1; min-width:220px;"><input type="text" id="rosterSearchBox" placeholder="ค้นหาชื่อหรือรหัสนักศึกษา" style="border:none; outline:none; background:transparent; font-family:'Prompt',sans-serif; font-size:13px; width:100%; color:var(--ink);"></div>
+        <button class="btn btn-outline btn-sm" id="rosterRefreshBtn">รีเฟรช</button>
       </div>
       <div class="card" style="padding:8px 0;">
-        <table>
-          <thead><tr><th>นักศึกษา</th><th>หมู่เรียน</th><th>รายวิชา</th><th>% เข้าเรียน</th><th>สถานะล่าสุด</th></tr></thead>
-          <tbody>
-            <tr><td><div class="person"><div class="init">สร</div>สมฤดี รักเรียน · 6512301</div></td><td>MK-A</td><td>MK214</td><td><span class="pct-bar"><div style="width:94%; background:var(--green);"></div></span>94%</td><td><span class="badge badge-green">มา</span></td></tr>
-            <tr style="background:var(--red-bg);"><td><div class="person"><div class="init">อธ</div>อธิษฐ์ ไม่มาเรียน · 6512322</div></td><td>MK-B</td><td>MK214</td><td><span class="pct-bar"><div style="width:61%; background:var(--red);"></div></span>61%</td><td><span class="badge badge-red">ขาด</span></td></tr>
-            <tr><td><div class="person"><div class="init">วช</div>วิชัย ชาญกิจ · 6512302</div></td><td>MK-A</td><td>MK214</td><td><span class="pct-bar"><div style="width:78%; background:var(--orange);"></div></span>78%</td><td><span class="badge badge-orange">สาย</span></td></tr>
-            <tr><td><div class="person"><div class="init">นพ</div>นภัสวรรณ พงษ์ไทย · 6512305</div></td><td>MK-B</td><td>MK214</td><td><span class="pct-bar"><div style="width:97%; background:var(--green);"></div></span>97%</td><td><span class="badge badge-green">มา</span></td></tr>
-            <tr><td><div class="person"><div class="init">ปว</div>ปวีณา วงศ์สุข · 6512314</div></td><td>MK-A</td><td>MK214</td><td><span class="pct-bar"><div style="width:88%; background:var(--green);"></div></span>88%</td><td><span class="badge badge-cyan">ลา</span></td></tr>
-          </tbody>
-        </table>
+        <div id="rosterTableWrap"><div class="empty-note">กำลังโหลด...</div></div>
       </div>
-      <div class="sub" style="margin-top:10px;">แถวสีแดงอ่อน = เข้าเรียนต่ำกว่าเกณฑ์ 80% · คลิกแถวเพื่อดูประวัติรายบุคคล</div>
+      <div class="sub" style="margin-top:10px;">แถวสีแดงอ่อน = เข้าเรียนต่ำกว่า 80% (คำนวณจาก จำนวนครั้งที่เช็คชื่อ ÷ จำนวนคาบทั้งหมดที่เปิดมา)</div>
     </section>
 
     <!-- LEAVE APPROVAL -->
@@ -582,7 +567,7 @@ function renderDashboard(){
   document.getElementById('summaryCards').innerHTML = `
     <div class="card stat-card"><div class="ic" style="background:var(--blue-light); color:var(--blue-dark);">▦</div><div><div class="n">${todays.length}</div><div class="l">คาบวันนี้</div></div></div>
     <div class="card stat-card"><div class="ic" style="background:var(--orange-bg); color:var(--orange);">⌂</div><div><div class="n">${rooms}</div><div class="l">ห้องเรียน</div></div></div>
-    <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">☺</div><div><div class="n">-</div><div class="l">นักศึกษาทั้งหมด</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">☺</div><div><div class="n">${state.rosterCount ?? '-'}</div><div class="l">นักศึกษาทั้งหมด</div></div></div>
     <div class="card stat-card"><div class="ic" style="background:var(--green-bg); color:var(--green);">%</div><div><div class="n">-</div><div class="l">เข้าเรียนเฉลี่ยวันนี้</div></div></div>
   `;
   const list = document.getElementById('sessionList');
@@ -645,9 +630,6 @@ function renderQr(s){
   img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=172x172&margin=0&data=' + encodeURIComponent(s.pin);
   img.width = 172; img.height = 172;
   img.alt = 'QR PIN ' + s.pin;
-  img.style.borderRadius = '8px';
-  img.style.position = 'relative';
-  img.style.zIndex = '2';
   img.onerror = function(){
     holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
   };
@@ -756,8 +738,137 @@ document.getElementById('addSessionBtn').addEventListener('click', async ()=>{
 
 async function initApp(){
   state.sessions = await loadSessions();
+  const { count } = await sb.from('roster').select('*', {count:'exact', head:true});
+  state.rosterCount = count ?? null;
   renderDashboard();
 }
+
+// ===== ROSTER =====
+let rosterData = [];
+let rosterSearch = '';
+
+async function renderRosterPage(){
+  const wrap = document.getElementById('rosterTableWrap');
+  wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
+  const [{data: roster, error: rErr}, {data: sessions}, {data: attendance}] = await Promise.all([
+    sb.from('roster').select('*').order('name'),
+    sb.from('sessions').select('id'),
+    sb.from('attendance').select('student_id,status')
+  ]);
+  if(rErr){ wrap.innerHTML = '<div class="empty-note">โหลดรายชื่อไม่สำเร็จ</div>'; return; }
+  rosterData = roster || [];
+  const totalSessions = (sessions||[]).length;
+  const attCount = {};
+  (attendance||[]).forEach(a=>{ if(a.student_id) attCount[a.student_id] = (attCount[a.student_id]||0) + 1; });
+  rosterData = rosterData.map(r=>{
+    const cnt = attCount[r.student_id] || 0;
+    const pct = totalSessions ? Math.round((cnt/totalSessions)*100) : null;
+    return {...r, attCount: cnt, pct};
+  });
+  document.getElementById('rosterCountLabel').textContent = `รายชื่อทั้งหมด ${rosterData.length} คน · เปิดคาบเรียนมาแล้ว ${totalSessions} คาบ`;
+  renderRosterTable();
+}
+
+function renderRosterTable(){
+  const wrap = document.getElementById('rosterTableWrap');
+  const q = rosterSearch.trim().toLowerCase();
+  const rows = rosterData.filter(r => !q || r.name.toLowerCase().includes(q) || r.student_id.toLowerCase().includes(q));
+  if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบรายชื่อ — ลองนำเข้ารายชื่อด้านบน</div>'; return; }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>นักศึกษา</th><th>กลุ่มเรียน</th><th>เช็คชื่อแล้ว</th><th>% เข้าเรียน</th></tr></thead>
+      <tbody>${rows.map(r=>{
+        const low = r.pct !== null && r.pct < 80;
+        const barColor = r.pct === null ? 'var(--slate-light)' : (r.pct < 60 ? 'var(--red)' : r.pct < 80 ? 'var(--orange)' : 'var(--green)');
+        return `<tr ${low ? 'style="background:var(--red-bg);"' : ''}>
+          <td><div class="person"><div class="init">${initials(r.name)}</div>${escapeHtml(r.name)} · ${escapeHtml(r.student_id)}</div></td>
+          <td>${escapeHtml(r.group_name || '-')}</td>
+          <td>${r.attCount}</td>
+          <td>${r.pct === null ? '-' : `<span class="pct-bar"><div style="width:${r.pct}%; background:${barColor};"></div></span>${r.pct}%`}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+document.getElementById('rosterSearchBox').addEventListener('input', (e)=>{
+  rosterSearch = e.target.value;
+  renderRosterTable();
+});
+document.getElementById('rosterRefreshBtn').addEventListener('click', renderRosterPage);
+
+function parseRosterRows(rawRows){
+  // rawRows: array of arrays [id, name, group]
+  const out = [];
+  for(const row of rawRows){
+    const id = String(row[0] ?? '').trim();
+    const name = String(row[1] ?? '').trim();
+    const group = String(row[2] ?? '').trim();
+    if(!id || !name) continue;
+    if(!/^[0-9A-Za-z].*/.test(id)) continue;
+    // skip likely header row
+    if(/รหัส|student.?id/i.test(id) || /ชื่อ|name/i.test(name)) continue;
+    out.push({ student_id: id, name, group_name: group || null });
+  }
+  return out;
+}
+
+async function upsertRoster(rows){
+  if(!rows.length){ return {ok:false, msg:'ไม่พบข้อมูลที่ถูกต้อง'}; }
+  const { error } = await sb.from('roster').upsert(rows, { onConflict: 'student_id' });
+  if(error) return {ok:false, msg:'บันทึกไม่สำเร็จ: ' + error.message};
+  return {ok:true, count: rows.length};
+}
+
+document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
+  const text = document.getElementById('rosterPasteText').value;
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const rawRows = lines.map(l=>l.split(','));
+  const rows = parseRosterRows(rawRows);
+  const status = document.getElementById('rosterImportStatus');
+  status.textContent = 'กำลังบันทึก...';
+  const res = await upsertRoster(rows);
+  status.textContent = res.ok ? `นำเข้าสำเร็จ ${res.count} คน` : res.msg;
+  if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); }
+});
+
+document.getElementById('rosterExcelInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const status = document.getElementById('rosterImportStatus');
+  status.textContent = 'กำลังอ่านไฟล์...';
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rawRows = XLSX.utils.sheet_to_json(sheet, {header:1});
+    const rows = parseRosterRows(rawRows);
+    const res = await upsertRoster(rows);
+    status.textContent = res.ok ? `นำเข้าจาก Excel สำเร็จ ${res.count} คน` : res.msg;
+    if(res.ok){ toast('นำเข้าจาก Excel สำเร็จ'); renderRosterPage(); }
+  }catch(err){
+    status.textContent = 'อ่านไฟล์ไม่สำเร็จ: ' + err.message;
+  }
+  e.target.value = '';
+});
+
+document.getElementById('importSheetBtn').addEventListener('click', async ()=>{
+  const url = document.getElementById('rosterSheetUrl').value.trim();
+  const status = document.getElementById('rosterImportStatus');
+  if(!url){ status.textContent = 'กรุณาวางลิงก์ Google Sheets ที่ publish เป็น CSV แล้ว'; return; }
+  status.textContent = 'กำลังดึงข้อมูล...';
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('โหลดลิงก์ไม่สำเร็จ (สถานะ ' + res.status + ')');
+    const text = await res.text();
+    const rawRows = text.split('\n').map(l=>l.replace(/\r$/,'').split(',').map(c=>c.replace(/^"|"$/g,'')));
+    const rows = parseRosterRows(rawRows);
+    const r2 = await upsertRoster(rows);
+    status.textContent = r2.ok ? `ดึงจาก Google Sheets สำเร็จ ${r2.count} คน` : r2.msg;
+    if(r2.ok){ toast('ดึงจาก Google Sheets สำเร็จ'); renderRosterPage(); }
+  }catch(err){
+    status.textContent = 'ดึงข้อมูลไม่สำเร็จ: ' + err.message + ' (เช็คว่า publish เป็น CSV แล้วหรือยัง)';
+  }
+});
 
 checkAuth();
 </script>
@@ -805,6 +916,7 @@ document.querySelectorAll('.navitem').forEach(item=>{
     if(page !== 'live') stopLiveTimers();
     if(page === 'dashboard') renderDashboard();
     if(page === 'live') populateLivePicker();
+    if(page === 'students') renderRosterPage();
   });
 });
 
