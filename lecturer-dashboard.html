@@ -814,9 +814,27 @@ function parseRosterRows(rawRows){
 
 async function upsertRoster(rows){
   if(!rows.length){ return {ok:false, msg:'ไม่พบข้อมูลที่ถูกต้อง'}; }
-  const { error } = await sb.from('roster').upsert(rows, { onConflict: 'student_id' });
-  if(error) return {ok:false, msg:'บันทึกไม่สำเร็จ: ' + error.message};
-  return {ok:true, count: rows.length};
+  const dedupMap = new Map();
+  rows.forEach(r => dedupMap.set(r.student_id, r)); // เก็บรายการล่าสุดถ้ารหัสซ้ำ
+  const deduped = Array.from(dedupMap.values());
+  let success = 0;
+  const failed = [];
+  for(const row of deduped){
+    const { error } = await sb.from('roster').upsert(row, { onConflict: 'student_id' });
+    if(error) failed.push({ id: row.student_id, name: row.name, err: error.message });
+    else success++;
+  }
+  const skipped = rows.length - deduped.length;
+  if(failed.length){
+    return {
+      ok: success > 0,
+      count: success,
+      skipped,
+      msg: `บันทึกสำเร็จ ${success} คน แต่มี ${failed.length} คนบันทึกไม่ผ่าน: ` +
+        failed.slice(0,5).map(f=>`${f.id} (${f.err})`).join(', ') + (failed.length>5 ? ' ...' : '')
+    };
+  }
+  return {ok:true, count: success, skipped};
 }
 
 document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
@@ -827,7 +845,7 @@ document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(rows);
-  status.textContent = res.ok ? `นำเข้าสำเร็จ ${res.count} คน` : res.msg;
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
   if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); }
 });
 
@@ -843,7 +861,7 @@ document.getElementById('rosterExcelInput').addEventListener('change', async (e)
     const rawRows = XLSX.utils.sheet_to_json(sheet, {header:1});
     const rows = parseRosterRows(rawRows);
     const res = await upsertRoster(rows);
-    status.textContent = res.ok ? `นำเข้าจาก Excel สำเร็จ ${res.count} คน` : res.msg;
+    status.textContent = res.msg || (`นำเข้าจาก Excel สำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
     if(res.ok){ toast('นำเข้าจาก Excel สำเร็จ'); renderRosterPage(); }
   }catch(err){
     status.textContent = 'อ่านไฟล์ไม่สำเร็จ: ' + err.message;
@@ -863,7 +881,7 @@ document.getElementById('importSheetBtn').addEventListener('click', async ()=>{
     const rawRows = text.split('\n').map(l=>l.replace(/\r$/,'').split(',').map(c=>c.replace(/^"|"$/g,'')));
     const rows = parseRosterRows(rawRows);
     const r2 = await upsertRoster(rows);
-    status.textContent = r2.ok ? `ดึงจาก Google Sheets สำเร็จ ${r2.count} คน` : r2.msg;
+    status.textContent = r2.msg || (`ดึงจาก Google Sheets สำเร็จ ${r2.count} คน` + (r2.skipped ? ` (ข้ามรายการซ้ำ ${r2.skipped} แถว)` : ''));
     if(r2.ok){ toast('ดึงจาก Google Sheets สำเร็จ'); renderRosterPage(); }
   }catch(err){
     status.textContent = 'ดึงข้อมูลไม่สำเร็จ: ' + err.message + ' (เช็คว่า publish เป็น CSV แล้วหรือยัง)';
