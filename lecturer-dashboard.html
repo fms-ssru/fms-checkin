@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -625,10 +625,14 @@ function renderQr(s){
   document.getElementById('pinDisplay').innerHTML = s.pin.split('').map(d=>`<div class="pin-digit">${d}</div>`).join('');
   const holder = document.getElementById('qrHolder');
   holder.innerHTML = '';
-  try{
-    new QRCode(holder, {text: s.pin, width:172, height:172, colorDark:'#0F172A', colorLight:'#ffffff'});
-  }catch(e){
-    holder.innerHTML = '<div class="qc">'+s.pin+'</div>';
+  if(typeof QRCode === 'undefined'){
+    holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
+  } else {
+    try{
+      new QRCode(holder, {text: s.pin, width:172, height:172, colorDark:'#0F172A', colorLight:'#ffffff'});
+    }catch(e){
+      holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
+    }
   }
   document.getElementById('qrCountdown').textContent = '00:20';
 }
