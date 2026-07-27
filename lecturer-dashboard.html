@@ -247,6 +247,7 @@
     <div class="navitem" data-page="students"><span class="ic">☰</span>จัดการรายชื่อ</div>
     <div class="navitem" data-page="leave"><span class="ic">✉</span>อนุมัติการลา</div>
     <div class="navitem" data-page="reports"><span class="ic">⇩</span>รายงาน</div>
+    <div class="navitem" data-page="admin" id="adminNavItem" style="display:none;"><span class="ic">🛡</span>แอดมิน</div>
     <div class="sidebar-foot" style="flex-direction:column; align-items:stretch;">
       <div style="display:flex; align-items:center; gap:10px;">
         <div class="avatar-sm" id="userAvatar">อจ</div>
@@ -504,6 +505,30 @@
       </div>
     </section>
 
+    <!-- ADMIN -->
+    <section class="page" id="page-admin">
+      <div class="topbar"><div><h1>แอดมิน</h1><div class="sub" id="adminSubLabel">จัดการสิทธิ์ผู้ใช้และภาพรวมทั้งระบบ</div></div></div>
+
+      <div class="grid-4" id="adminStatCards"></div>
+
+      <div class="section-title"><h2>ผู้ใช้งานทั้งหมด</h2></div>
+      <div class="filter-bar">
+        <div class="search-box" style="flex:1; min-width:220px;"><input type="text" id="adminUserSearch" placeholder="ค้นหาชื่อหรืออีเมล" style="border:none; outline:none; background:transparent; font-family:'Prompt',sans-serif; font-size:13px; width:100%; color:var(--ink);"></div>
+        <div class="chip active" data-role-filter="all">ทั้งหมด</div>
+        <div class="chip" data-role-filter="lecturer">อาจารย์</div>
+        <div class="chip" data-role-filter="student">นักศึกษา</div>
+        <div class="chip" data-role-filter="admin">แอดมิน</div>
+      </div>
+      <div class="card" style="padding:8px 0; margin-bottom:24px;">
+        <div id="adminUsersWrap"><div class="empty-note">กำลังโหลด...</div></div>
+      </div>
+
+      <div class="section-title"><h2>รายวิชาทั้งหมดในระบบ (ทุกอาจารย์)</h2></div>
+      <div class="card" style="padding:8px 0;">
+        <div id="adminCoursesWrap"><div class="empty-note">กำลังโหลด...</div></div>
+      </div>
+    </section>
+
     <div id="printOnlyArea" style="display:none;"></div>
 
   </main>
@@ -557,6 +582,10 @@ async function showApp(session, profile){
   document.getElementById('userName').textContent = profile.name || profile.email;
   document.getElementById('userEmail').textContent = profile.email;
   document.getElementById('userAvatar').textContent = initials(profile.name || profile.email);
+  if(profile.role === 'admin'){
+    document.getElementById('adminNavItem').style.display = 'flex';
+    document.getElementById('userEmail').textContent = profile.email + ' · แอดมิน';
+  }
   await initApp();
 }
 async function checkAuth(){
@@ -567,7 +596,7 @@ async function checkAuth(){
     showLogin('ไม่พบโปรไฟล์ผู้ใช้ ลองเข้าสู่ระบบใหม่อีกครั้ง');
     return;
   }
-  if(profile.role !== 'lecturer'){
+  if(profile.role !== 'lecturer' && profile.role !== 'admin'){
     await sb.auth.signOut();
     showLogin('บัญชีนี้ไม่ใช่บัญชีอาจารย์/เจ้าหน้าที่ กรุณาใช้บัญชี ssru.ac.th ของอาจารย์');
     return;
@@ -1807,6 +1836,113 @@ document.getElementById('exportPdfBtn').addEventListener('click', ()=>{
   window.print();
 });
 
+// ===== ADMIN =====
+let adminUsers = [];
+let adminUserSearch = '';
+let adminRoleFilter = 'all';
+
+async function renderAdminPage(){
+  const wrap = document.getElementById('adminUsersWrap');
+  wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
+  const coursesWrap = document.getElementById('adminCoursesWrap');
+  coursesWrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
+
+  const [{data: profiles}, {data: courses}, {data: sections}] = await Promise.all([
+    sb.from('profiles').select('*').order('email'),
+    sb.from('courses').select('*, profiles(email, name)').order('code'),
+    sb.from('sections').select('id, course_id')
+  ]);
+  adminUsers = profiles || [];
+
+  const countBySectionAll = {};
+  const { data: allRosterCounts } = await sb.from('roster').select('section_id').not('section_id','is',null);
+  (allRosterCounts||[]).forEach(r=>{ countBySectionAll[r.section_id] = (countBySectionAll[r.section_id]||0)+1; });
+  const sectionCountByCourse = {};
+  (sections||[]).forEach(s=>{ sectionCountByCourse[s.course_id] = (sectionCountByCourse[s.course_id]||0)+1; });
+
+  const lecturerCount = adminUsers.filter(u=>u.role==='lecturer').length;
+  const studentCount = adminUsers.filter(u=>u.role==='student').length;
+  document.getElementById('adminStatCards').innerHTML = `
+    <div class="card stat-card"><div class="ic" style="background:var(--blue-light); color:var(--blue-dark);">👤</div><div><div class="n">${adminUsers.length}</div><div class="l">ผู้ใช้ทั้งหมด</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--orange-bg); color:var(--orange);">🎓</div><div><div class="n">${lecturerCount}</div><div class="l">อาจารย์</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">🧑‍🎓</div><div><div class="n">${studentCount}</div><div class="l">นักศึกษา</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--green-bg); color:var(--green);">📚</div><div><div class="n">${(courses||[]).length}</div><div class="l">รายวิชาทั้งหมด</div></div></div>
+  `;
+
+  renderAdminUsersTable();
+
+  if(!courses || !courses.length){
+    coursesWrap.innerHTML = '<div class="empty-note">ยังไม่มีรายวิชาในระบบ</div>';
+  } else {
+    coursesWrap.innerHTML = `
+      <table>
+        <thead><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>อาจารย์เจ้าของ</th><th>จำนวนหมู่เรียน</th></tr></thead>
+        <tbody>${courses.map(c=>`
+          <tr>
+            <td>${escapeHtml(c.code)}</td>
+            <td>${escapeHtml(c.name)}</td>
+            <td>${escapeHtml(c.profiles?.name || c.profiles?.email || '-')}</td>
+            <td>${sectionCountByCourse[c.id]||0}</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  }
+}
+
+function renderAdminUsersTable(){
+  const wrap = document.getElementById('adminUsersWrap');
+  const q = adminUserSearch.trim().toLowerCase();
+  let rows = adminUsers;
+  if(adminRoleFilter !== 'all') rows = rows.filter(u=>u.role===adminRoleFilter);
+  if(q) rows = rows.filter(u => (u.name||'').toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบผู้ใช้</div>'; return; }
+  const roleLabel = { lecturer:'อาจารย์', student:'นักศึกษา', admin:'แอดมิน' };
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>ผู้ใช้</th><th>รหัสนักศึกษา</th><th>สิทธิ์ปัจจุบัน</th><th></th></tr></thead>
+      <tbody>${rows.map(u=>`
+        <tr>
+          <td><div class="person"><div class="init">${initials(u.name||u.email)}</div>${escapeHtml(u.name||'(ไม่มีชื่อ)')} · ${escapeHtml(u.email)}</div></td>
+          <td>${escapeHtml(u.student_id||'-')}</td>
+          <td><span class="badge ${u.role==='admin'?'badge-orange':u.role==='lecturer'?'badge-blue':'badge-green'}">${roleLabel[u.role]||u.role}</span></td>
+          <td style="white-space:nowrap;">
+            <select class="status-select" data-role-select="${u.id}">
+              <option value="student" ${u.role==='student'?'selected':''}>นักศึกษา</option>
+              <option value="lecturer" ${u.role==='lecturer'?'selected':''}>อาจารย์</option>
+              <option value="admin" ${u.role==='admin'?'selected':''}>แอดมิน</option>
+            </select>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+
+  wrap.querySelectorAll('[data-role-select]').forEach(sel=>{
+    sel.onchange = async ()=>{
+      const userId = sel.dataset.roleSelect;
+      const newRole = sel.value;
+      if(userId === currentUser.id && newRole !== 'admin'){
+        if(!confirm('คุณกำลังจะถอดสิทธิ์แอดมินของตัวเอง จะออกจากหน้านี้ทันที ยืนยันไหม?')){ renderAdminUsersTable(); return; }
+      }
+      const { error } = await sb.from('profiles').update({ role: newRole }).eq('id', userId);
+      if(error){ toast('เปลี่ยนสิทธิ์ไม่สำเร็จ: ' + error.message); renderAdminUsersTable(); return; }
+      toast('เปลี่ยนสิทธิ์แล้ว');
+      if(userId === currentUser.id && newRole !== 'admin'){ window.location.reload(); return; }
+      renderAdminPage();
+    };
+  });
+}
+
+document.getElementById('adminUserSearch').addEventListener('input', (e)=>{
+  adminUserSearch = e.target.value;
+  renderAdminUsersTable();
+});
+document.querySelectorAll('#page-admin [data-role-filter]').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.querySelectorAll('#page-admin [data-role-filter]').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    adminRoleFilter = chip.dataset.roleFilter;
+    renderAdminUsersTable();
+  });
+});
+
 checkAuth();
 </script>
 
@@ -1857,6 +1993,7 @@ document.querySelectorAll('.navitem').forEach(item=>{
     if(page === 'stats') renderStatsPage();
     if(page === 'leave') renderLeavePage();
     if(page === 'reports') renderReportsPage();
+    if(page === 'admin') renderAdminPage();
     if(page === 'courses') renderCoursesPage();
   });
 });
