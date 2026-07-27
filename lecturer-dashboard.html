@@ -190,6 +190,16 @@
     .sidebar.open{left:0;}
     .main{padding:16px;}
   }
+  @media print{
+    body *{ visibility:hidden; }
+    #printOnlyArea, #printOnlyArea *{ visibility:visible; }
+    #printOnlyArea{ display:block !important; position:absolute; top:0; left:0; width:100%; padding:20px; }
+    #printOnlyArea h1{ font-family:'Kanit',sans-serif; font-size:18px; margin-bottom:4px; }
+    #printOnlyArea .print-sub{ font-size:12px; color:#64748B; margin-bottom:16px; }
+    #printOnlyArea table{ width:100%; border-collapse:collapse; font-size:11px; }
+    #printOnlyArea th, #printOnlyArea td{ border:1px solid #ccc; padding:5px 8px; text-align:left; }
+    #printOnlyArea th{ background:#f0f0f0; }
+  }
 </style>
 </head>
 <body>
@@ -310,8 +320,8 @@
       </div>
     </section>
 
-    <div class="card" style="margin-bottom:18px; border-color:var(--orange); background:var(--orange-bg);" id="phaseNote">
-      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 5 หน้า (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ, สรุปการเข้าเรียน, อนุมัติการลา) เหลือแค่ "รายงาน" ที่ยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น</div>
+    <div class="card" style="margin-bottom:18px; border-color:var(--green); background:var(--green-bg);" id="phaseNote">
+      <div style="font-size:13px; color:var(--green);"><b>🎉 ครบแล้ว:</b> ทั้ง 6 เมนูทำงานจริงหมดแล้ว (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ, สรุปการเข้าเรียน, อนุมัติการลา, รายงาน)</div>
     </div>
 
     <!-- STATS DASHBOARD -->
@@ -422,37 +432,27 @@
 
     <!-- REPORTS -->
     <section class="page" id="page-reports">
-      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
       <div class="topbar"><div><h1>รายงาน</h1><div class="sub">สร้างและส่งออกรายงานการเข้าเรียน</div></div></div>
       <div class="card">
         <h2 style="font-size:14px; margin-bottom:14px;">ตัวกรองก่อนสร้างรายงาน</h2>
         <div class="filter-bar" style="margin-bottom:0;">
-          <select><option>ทุกรายวิชา</option><option>MK214 การตลาดดิจิทัล</option></select>
-          <select><option>ทุกห้องเรียน</option><option>MS-105</option></select>
-          <select><option>ภาคเรียนที่ 1</option></select>
-          <select><option>ปีการศึกษา 2569</option></select>
-          <input type="text" placeholder="เลือกช่วงวันที่">
+          <select id="reportSubjectFilter"><option value="">ทุกรายวิชา</option></select>
+          <button class="btn btn-outline btn-sm" id="reportRefreshBtn">สร้างรายงาน</button>
         </div>
       </div>
 
-      <div class="section-title"><h2>ตัวอย่างรายงาน</h2>
+      <div class="section-title"><h2>รายงานรายบุคคล <span id="reportCountLabel" class="muted" style="font-weight:400;"></span></h2>
         <div style="display:flex; gap:8px;">
-          <button class="btn btn-outline">⇩ Excel (.xlsx)</button>
-          <button class="btn btn-primary">⇩ PDF</button>
+          <button class="btn btn-outline" id="exportExcelBtn">⇩ Excel (.xlsx)</button>
+          <button class="btn btn-primary" id="exportPdfBtn">⇩ PDF</button>
         </div>
       </div>
       <div class="card" style="padding:8px 0;">
-        <table>
-          <thead><tr><th>รายวิชา</th><th>มาเรียน</th><th>สาย</th><th>ลา</th><th>ขาด</th><th>% เข้าเรียน</th></tr></thead>
-          <tbody>
-            <tr><td>การตลาดดิจิทัล (MK214)</td><td>612</td><td>58</td><td>22</td><td>18</td><td><span class="badge badge-green">91%</span></td></tr>
-            <tr><td>การจัดการเชิงกลยุทธ์ (MG301)</td><td>498</td><td>71</td><td>19</td><td>26</td><td><span class="badge badge-orange">84%</span></td></tr>
-            <tr><td>หลักการบัญชี 2 (AC102)</td><td>410</td><td>44</td><td>15</td><td>12</td><td><span class="badge badge-green">92%</span></td></tr>
-            <tr><td>การเงินธุรกิจ (FN220)</td><td>322</td><td>30</td><td>17</td><td>11</td><td><span class="badge badge-green">90%</span></td></tr>
-          </tbody>
-        </table>
+        <div id="reportTableWrap"><div class="empty-note">กด "สร้างรายงาน" เพื่อเริ่ม</div></div>
       </div>
     </section>
+
+    <div id="printOnlyArea" style="display:none;"></div>
 
   </main>
 </div>
@@ -1138,6 +1138,95 @@ document.getElementById('importSheetBtn').addEventListener('click', async ()=>{
 });
 
 
+// ===== REPORTS =====
+let reportRows = [];
+
+async function renderReportsPage(){
+  const wrap = document.getElementById('reportTableWrap');
+  wrap.innerHTML = '<div class="empty-note">กำลังสร้างรายงาน...</div>';
+  const [{data: sessions}, {data: attendance}, {data: roster}] = await Promise.all([
+    sb.from('sessions').select('id,code,subject,date'),
+    sb.from('attendance').select('session_id,student_id,student_email,status'),
+    sb.from('roster').select('*').order('name')
+  ]);
+  const allSessions = sessions || [];
+  const allAttendance = attendance || [];
+  const allRoster = roster || [];
+
+  const filterEl = document.getElementById('reportSubjectFilter');
+  if(filterEl.options.length <= 1){
+    const subjects = [...new Map(allSessions.map(s=>[s.code||s.subject, s.subject + (s.code?` (${s.code})`:'')])).entries()];
+    subjects.forEach(([key,label])=>{
+      const opt = document.createElement('option'); opt.value=key; opt.textContent=label; filterEl.appendChild(opt);
+    });
+  }
+  const selectedSubject = filterEl.value;
+  const sessionsFiltered = selectedSubject ? allSessions.filter(s=>(s.code||s.subject)===selectedSubject) : allSessions;
+  const sessionIdSet = new Set(sessionsFiltered.map(s=>s.id));
+  const totalSessions = sessionsFiltered.length;
+
+  reportRows = allRoster.map(stu=>{
+    const rows = allAttendance.filter(a => sessionIdSet.has(a.session_id) && a.student_id === stu.student_id);
+    const counts = {'มา':0,'สาย':0,'ลา':0,'ขาด':0};
+    rows.forEach(r=>{ if(counts[r.status]!==undefined) counts[r.status]++; });
+    const checkedSessions = new Set(rows.map(r=>r.session_id)).size;
+    const missing = Math.max(0, totalSessions - checkedSessions);
+    counts['ขาด'] += missing;
+    const present = counts['มา'] + counts['สาย'];
+    const pct = totalSessions ? Math.round((present/totalSessions)*100) : 0;
+    return { student_id: stu.student_id, name: stu.name, group: stu.group_name || '-', ...counts, pct };
+  });
+
+  document.getElementById('reportCountLabel').textContent = `(${reportRows.length} คน · ${totalSessions} คาบ)`;
+  renderReportTable();
+}
+
+function renderReportTable(){
+  const wrap = document.getElementById('reportTableWrap');
+  if(!reportRows.length){ wrap.innerHTML = '<div class="empty-note">ยังไม่มีรายชื่อ หรือยังไม่มีคาบเรียน</div>'; return; }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>รหัส</th><th>ชื่อ</th><th>กลุ่ม</th><th>มา</th><th>สาย</th><th>ลา</th><th>ขาด</th><th>% เข้าเรียน</th></tr></thead>
+      <tbody>${reportRows.map(r=>`
+        <tr>
+          <td>${escapeHtml(r.student_id)}</td>
+          <td>${escapeHtml(r.name)}</td>
+          <td>${escapeHtml(r.group)}</td>
+          <td>${r['มา']}</td><td>${r['สาย']}</td><td>${r['ลา']}</td><td>${r['ขาด']}</td>
+          <td><span class="badge ${r.pct>=80?'badge-green':r.pct>=60?'badge-orange':'badge-red'}">${r.pct}%</span></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+document.getElementById('reportSubjectFilter').addEventListener('change', renderReportsPage);
+document.getElementById('reportRefreshBtn').addEventListener('click', renderReportsPage);
+
+document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
+  if(!reportRows.length){ toast('ยังไม่มีข้อมูลรายงาน กด "สร้างรายงาน" ก่อน'); return; }
+  const data = reportRows.map(r=>({
+    'รหัสนักศึกษา': r.student_id, 'ชื่อ-นามสกุล': r.name, 'กลุ่มเรียน': r.group,
+    'มา': r['มา'], 'สาย': r['สาย'], 'ลา': r['ลา'], 'ขาด': r['ขาด'], '% เข้าเรียน': r.pct
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'รายงานการเข้าเรียน');
+  XLSX.writeFile(wb, `รายงานการเข้าเรียน_${todayISODate()}.xlsx`);
+});
+
+document.getElementById('exportPdfBtn').addEventListener('click', ()=>{
+  if(!reportRows.length){ toast('ยังไม่มีข้อมูลรายงาน กด "สร้างรายงาน" ก่อน'); return; }
+  const subjectLabel = document.getElementById('reportSubjectFilter').selectedOptions[0].textContent;
+  const printArea = document.getElementById('printOnlyArea');
+  printArea.innerHTML = `
+    <h1>รายงานการเข้าเรียน — FMS Attendance</h1>
+    <div class="print-sub">${escapeHtml(subjectLabel)} · สร้างเมื่อ ${new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'})}</div>
+    <table>
+      <thead><tr><th>รหัส</th><th>ชื่อ</th><th>กลุ่ม</th><th>มา</th><th>สาย</th><th>ลา</th><th>ขาด</th><th>% เข้าเรียน</th></tr></thead>
+      <tbody>${reportRows.map(r=>`<tr><td>${escapeHtml(r.student_id)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.group)}</td><td>${r['มา']}</td><td>${r['สาย']}</td><td>${r['ลา']}</td><td>${r['ขาด']}</td><td>${r.pct}%</td></tr>`).join('')}</tbody>
+    </table>`;
+  window.print();
+});
+
 checkAuth();
 </script>
 
@@ -1187,6 +1276,7 @@ document.querySelectorAll('.navitem').forEach(item=>{
     if(page === 'students') renderRosterPage();
     if(page === 'stats') renderStatsPage();
     if(page === 'leave') renderLeavePage();
+    if(page === 'reports') renderReportsPage();
   });
 });
 
