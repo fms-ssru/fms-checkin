@@ -367,6 +367,15 @@
       <div class="topbar"><div><h1>จัดการรายชื่อนักศึกษา</h1><div class="sub" id="rosterCountLabel">กำลังโหลด…</div></div></div>
 
       <div class="card" style="margin-bottom:18px;">
+        <h2 style="font-size:14px; margin-bottom:12px;">ลงทะเบียนเข้าหมู่เรียนอัตโนมัติ (ไม่บังคับ)</h2>
+        <p class="muted" style="margin-bottom:10px;">เลือกหมู่เรียนไว้ก่อน แล้วนำเข้ารายชื่อด้วยวิธีไหนก็ได้ด้านล่าง ระบบจะลงทะเบียนเข้าหมู่นี้ให้อัตโนมัติทันที (ถ้าไม่เลือก จะแค่เพิ่มเข้าทำเนียบกลาง ต้องไปลงทะเบียนเองทีหลัง)</p>
+        <div class="filter-bar" style="margin-bottom:0;">
+          <select id="importCourseSelect"><option value="">ไม่ลงทะเบียน (แค่เพิ่มทำเนียบกลาง)</option></select>
+          <select id="importSectionSelect"><option value="">เลือกหมู่เรียน</option></select>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:18px;">
         <h2 style="font-size:14px; margin-bottom:12px;">1) วางรายชื่อด้วยมือ</h2>
         <p class="muted" style="margin-bottom:10px;">รูปแบบ: <code>รหัสนักศึกษา,ชื่อ-นามสกุล</code> บรรทัดละ 1 คน (ทำเนียบกลาง — ลงทะเบียนเข้าหมู่เรียนแยกด้านล่าง)</p>
         <textarea id="rosterPasteText" rows="5" style="width:100%; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1.5px solid var(--line);" placeholder="6512345,สมชาย ใจดี&#10;6512346,สมหญิง รักเรียน"></textarea>
@@ -1179,7 +1188,17 @@ async function populateEnrollDropdowns(){
   const sel = document.getElementById('enrollCourseSelect');
   const { data: courses } = await sb.from('courses').select('*').order('code');
   sel.innerHTML = '<option value="">เลือกรายวิชา</option>' + (courses||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.code)} - ${escapeHtml(c.name)}</option>`).join('');
+
+  const importSel = document.getElementById('importCourseSelect');
+  importSel.innerHTML = '<option value="">ไม่ลงทะเบียน (แค่เพิ่มทำเนียบกลาง)</option>' + (courses||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.code)} - ${escapeHtml(c.name)}</option>`).join('');
 }
+document.getElementById('importCourseSelect').addEventListener('change', async (e)=>{
+  const sectionSel = document.getElementById('importSectionSelect');
+  sectionSel.innerHTML = '<option value="">เลือกหมู่เรียน</option>';
+  if(!e.target.value) return;
+  const { data: sections } = await sb.from('sections').select('*').eq('course_id', e.target.value).order('name');
+  sectionSel.innerHTML += (sections||[]).map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+});
 document.getElementById('enrollCourseSelect').addEventListener('change', async (e)=>{
   const sectionSel = document.getElementById('enrollSectionSelect');
   sectionSel.innerHTML = '<option value="">เลือกหมู่เรียน</option>';
@@ -1269,22 +1288,34 @@ async function upsertRoster(rows){
   const deduped = Array.from(dedupMap.values());
   let success = 0;
   const failed = [];
+  const successIds = [];
   for(const row of deduped){
     const { error } = await sb.from('roster').upsert(row, { onConflict: 'student_id' });
     if(error) failed.push({ id: row.student_id, name: row.name, err: error.message });
-    else success++;
+    else { success++; successIds.push(row.student_id); }
   }
   const skipped = rows.length - deduped.length;
+
+  // ลงทะเบียนเข้าหมู่เรียนอัตโนมัติถ้าเลือกไว้
+  const sectionId = document.getElementById('importSectionSelect').value;
+  let enrolledCount = 0;
+  if(sectionId && successIds.length){
+    const enrollRows = successIds.map(sid => ({ section_id: sectionId, student_id: sid }));
+    const { error: enrollErr } = await sb.from('enrollments').upsert(enrollRows, { onConflict: 'section_id,student_id' });
+    if(!enrollErr) enrolledCount = successIds.length;
+  }
+
   if(failed.length){
     return {
       ok: success > 0,
       count: success,
       skipped,
+      enrolledCount,
       msg: `บันทึกสำเร็จ ${success} คน แต่มี ${failed.length} คนบันทึกไม่ผ่าน: ` +
         failed.slice(0,5).map(f=>`${f.id} (${f.err})`).join(', ') + (failed.length>5 ? ' ...' : '')
     };
   }
-  return {ok:true, count: success, skipped};
+  return {ok:true, count: success, skipped, enrolledCount};
 }
 
 document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
@@ -1295,7 +1326,7 @@ document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(rows);
-  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : '') + (res.enrolledCount ? ` · ลงทะเบียนเข้าหมู่เรียนแล้ว ${res.enrolledCount} คน` : ''));
   if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); }
 });
 
@@ -1361,7 +1392,7 @@ document.getElementById('mapConfirmBtn').addEventListener('click', async ()=>{
   const status = document.getElementById('rosterImportStatus');
   status.textContent = 'กำลังบันทึก...';
   const res = await upsertRoster(parsed);
-  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : '') + (res.enrolledCount ? ` · ลงทะเบียนเข้าหมู่เรียนแล้ว ${res.enrolledCount} คน` : ''));
   if(res.ok){
     toast('นำเข้ารายชื่อสำเร็จ');
     document.getElementById('rosterMappingPanel').style.display = 'none';
