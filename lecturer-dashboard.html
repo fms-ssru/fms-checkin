@@ -394,7 +394,19 @@
 
       <div class="filter-bar">
         <div class="search-box" style="flex:1; min-width:220px;"><input type="text" id="rosterSearchBox" placeholder="ค้นหาชื่อหรือรหัสนักศึกษา" style="border:none; outline:none; background:transparent; font-family:'Prompt',sans-serif; font-size:13px; width:100%; color:var(--ink);"></div>
+        <button class="btn btn-primary btn-sm" id="rosterAddBtn">+ เพิ่มนักศึกษา</button>
         <button class="btn btn-outline btn-sm" id="rosterRefreshBtn">รีเฟรช</button>
+      </div>
+      <div class="card" id="rosterAddForm" style="display:none; margin-bottom:14px;">
+        <div class="filter-bar" style="margin-bottom:10px;">
+          <input type="text" id="addStudentId" placeholder="รหัสนักศึกษา" style="flex:1; min-width:140px;">
+          <input type="text" id="addStudentName" placeholder="ชื่อ-นามสกุล" style="flex:1; min-width:160px;">
+          <input type="text" id="addStudentGroup" placeholder="กลุ่มเรียน (ไม่บังคับ)" style="flex:1; min-width:140px;">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-sm" id="rosterAddSaveBtn">บันทึก</button>
+          <button class="btn btn-ghost btn-sm" id="rosterAddCancelBtn">ยกเลิก</button>
+        </div>
       </div>
       <div class="card" style="padding:8px 0;">
         <div id="rosterTableWrap"><div class="empty-note">กำลังโหลด...</div></div>
@@ -798,6 +810,8 @@ async function renderRosterPage(){
   renderRosterTable();
 }
 
+let editingRosterId = null;
+
 function renderRosterTable(){
   const wrap = document.getElementById('rosterTableWrap');
   const q = rosterSearch.trim().toLowerCase();
@@ -805,8 +819,22 @@ function renderRosterTable(){
   if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบรายชื่อ — ลองนำเข้ารายชื่อด้านบน</div>'; return; }
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>นักศึกษา</th><th>กลุ่มเรียน</th><th>เช็คชื่อแล้ว</th><th>% เข้าเรียน</th></tr></thead>
+      <thead><tr><th>นักศึกษา</th><th>กลุ่มเรียน</th><th>เช็คชื่อแล้ว</th><th>% เข้าเรียน</th><th></th></tr></thead>
       <tbody>${rows.map(r=>{
+        if(r.student_id === editingRosterId){
+          return `<tr>
+            <td colspan="2">
+              <input type="text" class="edit-id" value="${escapeAttr(r.student_id)}" style="width:100px; margin-right:6px; padding:6px 8px; border-radius:6px; border:1px solid var(--line);">
+              <input type="text" class="edit-name" value="${escapeAttr(r.name)}" style="width:140px; margin-right:6px; padding:6px 8px; border-radius:6px; border:1px solid var(--line);">
+              <input type="text" class="edit-group" value="${escapeAttr(r.group_name || '')}" placeholder="กลุ่ม" style="width:90px; padding:6px 8px; border-radius:6px; border:1px solid var(--line);">
+            </td>
+            <td colspan="2">${r.attCount} เช็คชื่อ</td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-primary btn-sm" data-save="${escapeAttr(r.student_id)}">บันทึก</button>
+              <button class="btn btn-ghost btn-sm" data-cancel="1">ยกเลิก</button>
+            </td>
+          </tr>`;
+        }
         const low = r.pct !== null && r.pct < 80;
         const barColor = r.pct === null ? 'var(--slate-light)' : (r.pct < 60 ? 'var(--red)' : r.pct < 80 ? 'var(--orange)' : 'var(--green)');
         return `<tr ${low ? 'style="background:var(--red-bg);"' : ''}>
@@ -814,10 +842,70 @@ function renderRosterTable(){
           <td>${escapeHtml(r.group_name || '-')}</td>
           <td>${r.attCount}</td>
           <td>${r.pct === null ? '-' : `<span class="pct-bar"><div style="width:${r.pct}%; background:${barColor};"></div></span>${r.pct}%`}</td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-ghost btn-sm" data-edit="${escapeAttr(r.student_id)}">แก้ไข</button>
+            <button class="btn btn-ghost btn-sm" data-del="${escapeAttr(r.student_id)}" style="color:var(--red); border-color:var(--red);">ลบ</button>
+          </td>
         </tr>`;
       }).join('')}</tbody>
     </table>`;
+
+  wrap.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.onclick = ()=>{ editingRosterId = btn.dataset.edit; renderRosterTable(); };
+  });
+  wrap.querySelectorAll('[data-cancel]').forEach(btn=>{
+    btn.onclick = ()=>{ editingRosterId = null; renderRosterTable(); };
+  });
+  wrap.querySelectorAll('[data-save]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const tr = btn.closest('tr');
+      const newId = tr.querySelector('.edit-id').value.trim();
+      const newName = tr.querySelector('.edit-name').value.trim();
+      const newGroup = tr.querySelector('.edit-group').value.trim();
+      if(!newId || !newName){ toast('กรุณากรอกรหัสและชื่อให้ครบ'); return; }
+      const oldId = btn.dataset.save;
+      btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+      const { error } = await sb.from('roster').update({ student_id: newId, name: newName, group_name: newGroup || null }).eq('student_id', oldId);
+      if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); btn.disabled=false; btn.textContent='บันทึก'; return; }
+      toast('บันทึกแล้ว');
+      editingRosterId = null;
+      renderRosterPage();
+    };
+  });
+  wrap.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!confirm(`ยืนยันลบ ${btn.dataset.del} ออกจากรายชื่อ?`)) return;
+      const { error } = await sb.from('roster').delete().eq('student_id', btn.dataset.del);
+      if(error){ toast('ลบไม่สำเร็จ: ' + error.message); return; }
+      toast('ลบแล้ว');
+      renderRosterPage();
+    };
+  });
 }
+
+document.getElementById('rosterAddBtn').addEventListener('click', ()=>{
+  document.getElementById('rosterAddForm').style.display = 'block';
+  document.getElementById('addStudentId').focus();
+});
+document.getElementById('rosterAddCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('rosterAddForm').style.display = 'none';
+  ['addStudentId','addStudentName','addStudentGroup'].forEach(id=>document.getElementById(id).value='');
+});
+document.getElementById('rosterAddSaveBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('addStudentId').value.trim();
+  const name = document.getElementById('addStudentName').value.trim();
+  const group = document.getElementById('addStudentGroup').value.trim();
+  if(!id || !name){ toast('กรุณากรอกรหัสนักศึกษาและชื่อ'); return; }
+  const btn = document.getElementById('rosterAddSaveBtn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  const { error } = await sb.from('roster').upsert({ student_id:id, name, group_name: group || null }, { onConflict:'student_id' });
+  btn.disabled = false; btn.textContent = 'บันทึก';
+  if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
+  toast('เพิ่มนักศึกษาแล้ว');
+  document.getElementById('rosterAddForm').style.display = 'none';
+  ['addStudentId','addStudentName','addStudentGroup'].forEach(i=>document.getElementById(i).value='');
+  renderRosterPage();
+});
 
 document.getElementById('rosterSearchBox').addEventListener('input', (e)=>{
   rosterSearch = e.target.value;
