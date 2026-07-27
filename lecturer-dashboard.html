@@ -754,10 +754,12 @@ async function renderCoursesPage(){
             <div class="lbl">${escapeHtml(s.name)}</div>
             <div class="dt">${s.room?escapeHtml(s.room)+' · ':''}${countBySection[s.id]||0} คนลงทะเบียน</div>
             <div style="margin-top:8px; display:flex; gap:6px;">
+              <button class="btn btn-ghost btn-sm" data-view-roster="${s.id}" style="padding:5px 10px; font-size:12px;">ดูรายชื่อ</button>
               <button class="btn btn-ghost btn-sm" data-del-section="${s.id}" style="color:var(--red); border-color:var(--red); padding:5px 10px; font-size:12px;">ลบหมู่</button>
             </div>
           </div>`).join('') || '<div class="muted">ยังไม่มีหมู่เรียน</div>'}
         </div>
+        <div id="sectionRosterWrap-${c.id}"></div>
         <hr class="divider">
         <div class="filter-bar" style="margin-bottom:0;">
           <input type="text" data-newsec-name="${c.id}" placeholder="ชื่อหมู่ เช่น Sec 1" style="width:120px;">
@@ -781,6 +783,33 @@ async function renderCoursesPage(){
       if(error){ toast('เพิ่มหมู่เรียนไม่สำเร็จ: ' + error.message); return; }
       toast('เพิ่มหมู่เรียนแล้ว');
       renderCoursesPage();
+    };
+  });
+  wrap.querySelectorAll('[data-view-roster]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const sectionId = btn.dataset.viewRoster;
+      const sec = (sections||[]).find(s=>s.id===sectionId);
+      const targetWrap = document.getElementById(`sectionRosterWrap-${sec.course_id}`);
+      if(targetWrap.dataset.openFor === sectionId){
+        targetWrap.innerHTML = '';
+        targetWrap.dataset.openFor = '';
+        return;
+      }
+      targetWrap.dataset.openFor = sectionId;
+      targetWrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
+      const { data: students } = await sb.from('roster').select('student_id, name').eq('section_id', sectionId).order('name');
+      if(!students || !students.length){
+        targetWrap.innerHTML = `<div class="empty-note">หมู่ "${escapeHtml(sec.name)}" ยังไม่มีนักศึกษาลงทะเบียน</div>`;
+        return;
+      }
+      targetWrap.innerHTML = `
+        <div class="card" style="padding:8px 0; margin-bottom:14px;">
+          <div style="padding:10px 18px 0;" class="muted">รายชื่อในหมู่ "${escapeHtml(sec.name)}" (${students.length} คน)</div>
+          <table>
+            <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th></tr></thead>
+            <tbody>${students.map(st=>`<tr><td>${escapeHtml(st.student_id)}</td><td>${escapeHtml(st.name)}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>`;
     };
   });
   wrap.querySelectorAll('[data-del-section]').forEach(btn=>{
