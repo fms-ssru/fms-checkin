@@ -311,30 +311,23 @@
     </section>
 
     <div class="card" style="margin-bottom:18px; border-color:var(--orange); background:var(--orange-bg);" id="phaseNote">
-      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 3 หน้า (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ) ส่วนอีก 3 เมนูด้านล่างยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 4 หน้า (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ, สรุปการเข้าเรียน) ส่วนอีก 2 เมนูด้านล่างยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
     </div>
 
     <!-- STATS DASHBOARD -->
     <section class="page" id="page-stats">
-      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
-      <div class="topbar"><div><h1>สรุปการเข้าเรียน</h1><div class="sub">ภาพรวมทุกรายวิชาที่สอน</div></div></div>
+      <div class="topbar"><div><h1>สรุปการเข้าเรียน</h1><div class="sub" id="statsSubLabel">ภาพรวมทุกรายวิชาที่สอน</div></div></div>
       <div class="filter-bar">
-        <select><option>ทุกรายวิชา</option><option>MK214 การตลาดดิจิทัล</option><option>MG301 การจัดการเชิงกลยุทธ์</option></select>
-        <select><option>ภาคเรียนที่ 1</option><option>ภาคเรียนที่ 2</option></select>
-        <select><option>ปีการศึกษา 2569</option><option>ปีการศึกษา 2568</option></select>
-        <input type="text" placeholder="เลือกช่วงวันที่">
+        <select id="statsSubjectFilter"><option value="">ทุกรายวิชา</option></select>
+        <button class="btn btn-outline btn-sm" id="statsRefreshBtn">รีเฟรช</button>
       </div>
-      <div class="grid-4">
-        <div class="card stat-card"><div class="ic" style="background:var(--green-bg); color:var(--green);">✓</div><div><div class="n">1,842</div><div class="l">มาเรียน</div></div></div>
-        <div class="card stat-card"><div class="ic" style="background:var(--orange-bg); color:var(--orange);">⏱</div><div><div class="n">203</div><div class="l">สาย</div></div></div>
-        <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">✉</div><div><div class="n">88</div><div class="l">ลา</div></div></div>
-        <div class="card stat-card"><div class="ic" style="background:var(--red-bg); color:var(--red);">✕</div><div><div class="n">67</div><div class="l">ขาด</div></div></div>
-      </div>
+      <div class="grid-4" id="statsCards"></div>
       <div class="grid-2">
-        <div class="card"><h2 style="font-size:14px; margin-bottom:12px;">แนวโน้มการเข้าเรียนย้อนหลัง</h2><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
+        <div class="card"><h2 style="font-size:14px; margin-bottom:12px;">แนวโน้มการเข้าเรียนรายคาบ</h2><div class="chart-wrap"><canvas id="lineChart"></canvas></div></div>
         <div class="card"><h2 style="font-size:14px; margin-bottom:12px;">สัดส่วนสถานะการเข้าเรียน</h2><div class="chart-wrap"><canvas id="pieChart"></canvas></div></div>
       </div>
       <div class="card" style="margin-top:16px;"><h2 style="font-size:14px; margin-bottom:12px;">เปรียบเทียบเปอร์เซ็นต์เข้าเรียนแต่ละวิชา</h2><div class="chart-wrap"><canvas id="barChart"></canvas></div></div>
+      <div class="sub" style="margin-top:10px;">% เข้าเรียน = (จำนวนที่เช็คชื่อ มา/สาย) ÷ จำนวนรายชื่อทั้งหมด · "ขาด" นับรวมทั้งคนที่ไม่เช็คชื่อเลยและคนที่อาจารย์ปรับสถานะเป็นขาดเอง</div>
     </section>
 
     <!-- STUDENTS -->
@@ -1119,7 +1112,7 @@ themeToggleBtn.addEventListener('click', ()=>{
 function applyChartTheme(dark){
   const textColor = dark ? '#94A3B8' : '#64748B';
   const gridColor = dark ? '#1F2937' : '#E4E9F2';
-  [window.lineChartInstance, window.pieChartInstance, window.barChartInstance].forEach(ch=>{
+  [statsChartInstances.line, statsChartInstances.pie, statsChartInstances.bar].forEach(ch=>{
     if(!ch) return;
     if(ch.options.scales && ch.options.scales.y){
       ch.options.scales.y.ticks.color = textColor;
@@ -1147,42 +1140,117 @@ document.querySelectorAll('.navitem').forEach(item=>{
     if(page === 'dashboard') renderDashboard();
     if(page === 'live') populateLivePicker();
     if(page === 'students') renderRosterPage();
+    if(page === 'stats') renderStatsPage();
   });
 });
 
-const lineCtx = document.getElementById('lineChart');
-if(lineCtx){
-  window.lineChartInstance = new Chart(lineCtx, {
-    type:'line',
-    data:{
-      labels:['สัปดาห์ 1','สัปดาห์ 2','สัปดาห์ 3','สัปดาห์ 4','สัปดาห์ 5','สัปดาห์ 6'],
-      datasets:[{label:'% เข้าเรียน', data:[88,85,90,84,91,87], borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,0.08)', fill:true, tension:0.35, pointRadius:3}]
-    },
-    options:{plugins:{legend:{display:false}}, scales:{y:{min:60,max:100, ticks:{callback:v=>v+'%'}}}}
-  });
+let statsChartInstances = {};
+function destroyChart(key){
+  if(statsChartInstances[key]){ statsChartInstances[key].destroy(); statsChartInstances[key] = null; }
 }
-const pieCtx = document.getElementById('pieChart');
-if(pieCtx){
-  window.pieChartInstance = new Chart(pieCtx, {
-    type:'pie',
-    data:{
-      labels:['มา','สาย','ลา','ขาด'],
-      datasets:[{data:[79,9,4,8], backgroundColor:['#16A34A','#F97316','#0EA5E9','#DC2626']}]
-    },
-    options:{plugins:{legend:{position:'bottom', labels:{boxWidth:10, font:{size:11}}}}}
+
+async function renderStatsPage(){
+  const [{data: sessions}, {data: attendance}, {count: rosterCount}] = await Promise.all([
+    sb.from('sessions').select('id,code,subject,date').order('date'),
+    sb.from('attendance').select('session_id,status'),
+    sb.from('roster').select('*', {count:'exact', head:true})
+  ]);
+  const allSessions = sessions || [];
+  const allAttendance = attendance || [];
+  const totalRoster = rosterCount || 0;
+
+  // populate subject filter (once)
+  const filterEl = document.getElementById('statsSubjectFilter');
+  if(filterEl.options.length <= 1){
+    const subjects = [...new Map(allSessions.map(s=>[s.code||s.subject, s.subject + (s.code?` (${s.code})`:'')])).entries()];
+    subjects.forEach(([key, label])=>{
+      const opt = document.createElement('option');
+      opt.value = key; opt.textContent = label;
+      filterEl.appendChild(opt);
+    });
+  }
+  const selectedSubject = filterEl.value;
+  const sessionsFiltered = selectedSubject ? allSessions.filter(s => (s.code||s.subject) === selectedSubject) : allSessions;
+  const sessionIds = new Set(sessionsFiltered.map(s=>s.id));
+  const attFiltered = allAttendance.filter(a => sessionIds.has(a.session_id));
+
+  // stat cards
+  const counts = {'มา':0,'สาย':0,'ลา':0,'ขาด':0};
+  attFiltered.forEach(a=>{ if(counts[a.status] !== undefined) counts[a.status]++; });
+  const checkedInTotal = attFiltered.length;
+  const expectedTotal = sessionsFiltered.length * totalRoster;
+  const impliedAbsent = Math.max(0, expectedTotal - checkedInTotal);
+  counts['ขาด'] += impliedAbsent;
+
+  document.getElementById('statsCards').innerHTML = `
+    <div class="card stat-card"><div class="ic" style="background:var(--green-bg); color:var(--green);">✓</div><div><div class="n">${counts['มา']}</div><div class="l">มาเรียน</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--orange-bg); color:var(--orange);">⏱</div><div><div class="n">${counts['สาย']}</div><div class="l">สาย</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--cyan-bg); color:var(--cyan);">✉</div><div><div class="n">${counts['ลา']}</div><div class="l">ลา</div></div></div>
+    <div class="card stat-card"><div class="ic" style="background:var(--red-bg); color:var(--red);">✕</div><div><div class="n">${counts['ขาด']}</div><div class="l">ขาด</div></div></div>
+  `;
+
+  // line chart: % attendance per session (chronological), for filtered subject (or all if none selected)
+  const sessionsSorted = [...sessionsFiltered].sort((a,b)=> a.date.localeCompare(b.date));
+  const attBySession = {};
+  attFiltered.forEach(a=>{ attBySession[a.session_id] = (attBySession[a.session_id]||0) + (a.status==='มา'||a.status==='สาย' ? 1 : 0); });
+  const lineLabels = sessionsSorted.map(s => new Date(s.date).toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit'}));
+  const lineData = sessionsSorted.map(s => totalRoster ? Math.round(((attBySession[s.id]||0)/totalRoster)*100) : 0);
+
+  destroyChart('line');
+  const lineCtx = document.getElementById('lineChart');
+  if(lineCtx && sessionsSorted.length){
+    statsChartInstances.line = new Chart(lineCtx, {
+      type:'line',
+      data:{ labels: lineLabels, datasets:[{label:'% เข้าเรียน', data: lineData, borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,0.08)', fill:true, tension:0.35, pointRadius:3}] },
+      options:{plugins:{legend:{display:false}}, scales:{y:{min:0,max:100, ticks:{callback:v=>v+'%'}}}}
+    });
+  }
+
+  // pie chart: status distribution
+  destroyChart('pie');
+  const pieCtx = document.getElementById('pieChart');
+  if(pieCtx){
+    statsChartInstances.pie = new Chart(pieCtx, {
+      type:'pie',
+      data:{ labels:['มา','สาย','ลา','ขาด'], datasets:[{data:[counts['มา'],counts['สาย'],counts['ลา'],counts['ขาด']], backgroundColor:['#16A34A','#F97316','#0EA5E9','#DC2626']}] },
+      options:{plugins:{legend:{position:'bottom', labels:{boxWidth:10, font:{size:11}}}}}
+    });
+  }
+
+  // bar chart: % attendance per subject (across all sessions, ignoring the subject filter so comparison is meaningful)
+  const bySubject = {};
+  allSessions.forEach(s=>{
+    const key = s.code || s.subject;
+    if(!bySubject[key]) bySubject[key] = { label: key, sessions: 0, present: 0 };
+    bySubject[key].sessions++;
   });
-}
-const barCtx = document.getElementById('barChart');
-if(barCtx){
-  window.barChartInstance = new Chart(barCtx, {
-    type:'bar',
-    data:{
-      labels:['MK214','MG301','AC102','FN220','MG215'],
-      datasets:[{label:'% เข้าเรียน', data:[91,84,92,90,86], backgroundColor:'#2563EB', borderRadius:6, maxBarThickness:38}]
-    },
-    options:{plugins:{legend:{display:false}}, scales:{y:{min:0,max:100, ticks:{callback:v=>v+'%'}}}}
+  allAttendance.forEach(a=>{
+    const sess = allSessions.find(s=>s.id===a.session_id);
+    if(!sess) return;
+    const key = sess.code || sess.subject;
+    if(bySubject[key] && (a.status==='มา'||a.status==='สาย')) bySubject[key].present++;
   });
+  const subjectKeys = Object.keys(bySubject);
+  const barLabels = subjectKeys;
+  const barData = subjectKeys.map(k=>{
+    const b = bySubject[k];
+    const expected = b.sessions * totalRoster;
+    return expected ? Math.round((b.present/expected)*100) : 0;
+  });
+
+  destroyChart('bar');
+  const barCtx = document.getElementById('barChart');
+  if(barCtx && subjectKeys.length){
+    statsChartInstances.bar = new Chart(barCtx, {
+      type:'bar',
+      data:{ labels: barLabels, datasets:[{label:'% เข้าเรียน', data: barData, backgroundColor:'#2563EB', borderRadius:6, maxBarThickness:38}] },
+      options:{plugins:{legend:{display:false}}, scales:{y:{min:0,max:100, ticks:{callback:v=>v+'%'}}}}
+    });
+  }
 }
+
+document.getElementById('statsSubjectFilter').addEventListener('change', renderStatsPage);
+document.getElementById('statsRefreshBtn').addEventListener('click', renderStatsPage);
 </script>
 </body>
 </html>
