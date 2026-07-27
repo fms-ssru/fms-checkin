@@ -1138,7 +1138,15 @@ async function renderRosterPage(){
     const cnt = attCount[r.student_id] || 0;
     const pct = totalSessions ? Math.round((cnt/totalSessions)*100) : null;
     return { ...r, sectionLabel: r.section_id ? (sectionLabel[r.section_id] || '?') : null, attCount: cnt, pct };
-  }).sort((a,b)=>a.name.localeCompare(b.name,'th'));
+  }).sort((a,b)=>{
+    if(!a.sectionLabel && b.sectionLabel) return 1;
+    if(a.sectionLabel && !b.sectionLabel) return -1;
+    if(a.sectionLabel && b.sectionLabel){
+      const secCmp = a.sectionLabel.localeCompare(b.sectionLabel, 'th', {numeric:true});
+      if(secCmp !== 0) return secCmp;
+    }
+    return a.name.localeCompare(b.name,'th');
+  });
 
   document.getElementById('rosterCountLabel').textContent = `นักศึกษาของฉันทั้งหมด ${rosterData.length} คน`;
   renderRosterTable();
@@ -1147,14 +1155,17 @@ async function renderRosterPage(){
 
 let editingRosterId = null;
 let selectedRosterIds = new Set();
+let rosterShowAll = false;
+const ROSTER_PAGE_SIZE = 10;
 
 function renderRosterTable(){
   const wrap = document.getElementById('rosterTableWrap');
   const q = rosterSearch.trim().toLowerCase();
   const rows = rosterData.filter(r => !q || r.name.toLowerCase().includes(q) || r.student_id.toLowerCase().includes(q));
   if(!rows.length){ wrap.innerHTML = '<div class="empty-note">ไม่พบรายชื่อ — เพิ่มด้านบนได้เลย</div>'; return; }
-  const visibleIds = new Set(rows.map(r=>r.student_id));
-  const allVisibleSelected = rows.length > 0 && rows.every(r => selectedRosterIds.has(r.student_id));
+  const displayRows = rosterShowAll ? rows : rows.slice(0, ROSTER_PAGE_SIZE);
+  const visibleIds = new Set(displayRows.map(r=>r.student_id));
+  const allVisibleSelected = displayRows.length > 0 && displayRows.every(r => selectedRosterIds.has(r.student_id));
 
   wrap.innerHTML = `
     ${selectedRosterIds.size ? `
@@ -1168,7 +1179,7 @@ function renderRosterTable(){
         <th style="width:36px;"><input type="checkbox" id="selectAllRoster" ${allVisibleSelected?'checked':''}></th>
         <th>นักศึกษา</th><th>หมู่เรียน</th><th>เช็คชื่อแล้ว</th><th></th>
       </tr></thead>
-      <tbody>${rows.map(r=>{
+      <tbody>${displayRows.map(r=>{
         if(r.student_id === editingRosterId){
           return `<tr>
             <td></td>
@@ -1193,7 +1204,18 @@ function renderRosterTable(){
           </td>
         </tr>`;
       }).join('')}</tbody>
-    </table>`;
+    </table>
+    ${rows.length > ROSTER_PAGE_SIZE ? `
+      <div style="text-align:center; padding:14px;">
+        ${rosterShowAll
+          ? `<button class="btn btn-ghost btn-sm" id="rosterCollapseBtn">ย่อกลับ (แสดง ${ROSTER_PAGE_SIZE} คนแรก)</button>`
+          : `<button class="btn btn-outline btn-sm" id="rosterShowAllBtn">ดูทั้งหมด (${rows.length} คน)</button>`}
+      </div>` : ''}`;
+
+  const showAllBtn = document.getElementById('rosterShowAllBtn');
+  if(showAllBtn){ showAllBtn.onclick = ()=>{ rosterShowAll = true; renderRosterTable(); }; }
+  const collapseBtn = document.getElementById('rosterCollapseBtn');
+  if(collapseBtn){ collapseBtn.onclick = ()=>{ rosterShowAll = false; renderRosterTable(); }; }
 
   const selectAllBox = document.getElementById('selectAllRoster');
   if(selectAllBox){
