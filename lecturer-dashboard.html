@@ -728,6 +728,57 @@ document.getElementById('newSectionSelect').addEventListener('change', (e)=>{
 });
 
 // ===== COURSES / SECTIONS =====
+async function renderSectionRosterBox(targetWrap, sec){
+  targetWrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
+  const { data: students } = await sb.from('roster').select('student_id, name').eq('section_id', sec.id).order('name');
+  const rows = students || [];
+  targetWrap.innerHTML = `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="muted" style="margin-bottom:10px;">รายชื่อในหมู่ "${escapeHtml(sec.name)}" (${rows.length} คน)</div>
+      <div class="filter-bar" style="margin-bottom:12px;">
+        <input type="text" id="quickAddId-${sec.id}" placeholder="รหัสนักศึกษา" style="width:130px;">
+        <input type="text" id="quickAddName-${sec.id}" placeholder="ชื่อ-นามสกุล" style="flex:1; min-width:160px;">
+        <button class="btn btn-primary btn-sm" data-quick-add="${sec.id}">+ เพิ่มเข้าหมู่นี้</button>
+      </div>
+      ${rows.length ? `
+        <div style="max-height:280px; overflow-y:auto;">
+          <table>
+            <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th></th></tr></thead>
+            <tbody>${rows.map(st=>`
+              <tr>
+                <td>${escapeHtml(st.student_id)}</td>
+                <td>${escapeHtml(st.name)}</td>
+                <td><button class="btn btn-ghost btn-sm" data-quick-del="${escapeAttr(st.student_id)}" style="color:var(--red); border-color:var(--red);">ลบ</button></td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>` : '<div class="empty-note">ยังไม่มีนักศึกษาในหมู่นี้</div>'}
+    </div>`;
+
+  const addBtn = targetWrap.querySelector(`[data-quick-add="${sec.id}"]`);
+  addBtn.onclick = async ()=>{
+    const idInput = document.getElementById(`quickAddId-${sec.id}`);
+    const nameInput = document.getElementById(`quickAddName-${sec.id}`);
+    const id = idInput.value.trim();
+    const name = nameInput.value.trim();
+    if(!id || !name){ toast('กรุณากรอกรหัสนักศึกษาและชื่อ'); return; }
+    addBtn.disabled = true; addBtn.textContent = 'กำลังเพิ่ม...';
+    const { error } = await sb.from('roster').upsert({ student_id:id, name, section_id: sec.id }, { onConflict:'owner_id,student_id' });
+    addBtn.disabled = false; addBtn.textContent = '+ เพิ่มเข้าหมู่นี้';
+    if(error){ toast('เพิ่มไม่สำเร็จ: ' + error.message); return; }
+    toast('เพิ่มเข้าหมู่เรียนแล้ว');
+    renderSectionRosterBox(targetWrap, sec);
+    renderCoursesPage();
+  };
+  targetWrap.querySelectorAll('[data-quick-del]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!confirm(`ยืนยันลบ ${btn.dataset.quickDel} ออกจากรายชื่อของฉัน?`)) return;
+      await sb.from('roster').delete().eq('student_id', btn.dataset.quickDel);
+      toast('ลบแล้ว');
+      renderSectionRosterBox(targetWrap, sec);
+    };
+  });
+}
+
 async function renderCoursesPage(){
   const wrap = document.getElementById('coursesListWrap');
   wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
@@ -796,20 +847,7 @@ async function renderCoursesPage(){
         return;
       }
       targetWrap.dataset.openFor = sectionId;
-      targetWrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
-      const { data: students } = await sb.from('roster').select('student_id, name').eq('section_id', sectionId).order('name');
-      if(!students || !students.length){
-        targetWrap.innerHTML = `<div class="empty-note">หมู่ "${escapeHtml(sec.name)}" ยังไม่มีนักศึกษาลงทะเบียน</div>`;
-        return;
-      }
-      targetWrap.innerHTML = `
-        <div class="card" style="padding:8px 0; margin-bottom:14px;">
-          <div style="padding:10px 18px 0;" class="muted">รายชื่อในหมู่ "${escapeHtml(sec.name)}" (${students.length} คน)</div>
-          <table>
-            <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th></tr></thead>
-            <tbody>${students.map(st=>`<tr><td>${escapeHtml(st.student_id)}</td><td>${escapeHtml(st.name)}</td></tr>`).join('')}</tbody>
-          </table>
-        </div>`;
+      await renderSectionRosterBox(targetWrap, sec);
     };
   });
   wrap.querySelectorAll('[data-del-section]').forEach(btn=>{
