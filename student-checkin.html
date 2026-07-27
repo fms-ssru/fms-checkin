@@ -205,7 +205,7 @@ function bindEvents(){
     googleLoginBtn.onclick = async ()=>{
       await sb.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.href, queryParams: { hd: 'ssru.ac.th', prompt: 'select_account' } }
+        options: { redirectTo: 'https://fms-ssru.github.io/fms-checkin/student-checkin.html', queryParams: { hd: 'ssru.ac.th', prompt: 'select_account' } }
       });
     };
   }

@@ -516,7 +516,7 @@ async function checkAuth(){
 document.getElementById('googleLoginBtn').addEventListener('click', async ()=>{
   await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href, queryParams: { hd: 'ssru.ac.th', prompt: 'select_account' } }
+    options: { redirectTo: 'https://fms-ssru.github.io/fms-checkin/lecturer-dashboard.html', queryParams: { hd: 'ssru.ac.th', prompt: 'select_account' } }
   });
 });
 document.getElementById('logoutBtn').addEventListener('click', async ()=>{
