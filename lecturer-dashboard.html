@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -627,15 +626,15 @@ function renderQr(s){
   document.getElementById('pinDisplay').innerHTML = s.pin.split('').map(d=>`<div class="pin-digit">${d}</div>`).join('');
   const holder = document.getElementById('qrHolder');
   holder.innerHTML = '';
-  if(typeof QRCode === 'undefined'){
+  const img = document.createElement('img');
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=172x172&margin=0&data=' + encodeURIComponent(s.pin);
+  img.width = 172; img.height = 172;
+  img.alt = 'QR PIN ' + s.pin;
+  img.style.borderRadius = '8px';
+  img.onerror = function(){
     holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
-  } else {
-    try{
-      new QRCode(holder, {text: s.pin, width:172, height:172, colorDark:'#0F172A', colorLight:'#ffffff'});
-    }catch(e){
-      holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
-    }
-  }
+  };
+  holder.appendChild(img);
   document.getElementById('qrCountdown').textContent = '00:20';
 }
 
