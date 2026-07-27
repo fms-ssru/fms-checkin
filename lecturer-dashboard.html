@@ -361,6 +361,35 @@
         </div>
 
         <div id="rosterImportStatus" class="muted" style="margin-top:12px;"></div>
+
+        <div id="rosterMappingPanel" style="display:none; margin-top:16px; border-top:1px dashed var(--line); padding-top:16px;">
+          <h2 style="font-size:14px; margin-bottom:10px;">ยืนยันคอลัมน์ก่อนนำเข้า</h2>
+          <p class="muted" style="margin-bottom:12px;">เลือกว่าคอลัมน์ไหนคือข้อมูลอะไร (ดูตัวอย่างข้อมูลจริงประกอบ) ระบบเดาให้เบื้องต้นแล้ว เช็คให้ถูกต้องก่อนกดยืนยัน</p>
+          <div class="filter-bar" style="margin-bottom:12px;">
+            <div>
+              <label class="muted" style="display:block; font-size:12px; margin-bottom:4px;">รหัสนักศึกษา</label>
+              <select id="mapColId"></select>
+            </div>
+            <div>
+              <label class="muted" style="display:block; font-size:12px; margin-bottom:4px;">ชื่อ-นามสกุล</label>
+              <select id="mapColName"></select>
+            </div>
+            <div>
+              <label class="muted" style="display:block; font-size:12px; margin-bottom:4px;">กลุ่มเรียน (ไม่บังคับ)</label>
+              <select id="mapColGroup"></select>
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:12px;">
+            <input type="checkbox" id="mapSkipHeader" checked> แถวแรกเป็นหัวตาราง (ข้ามแถวแรก)
+          </label>
+          <div style="overflow-x:auto; margin-bottom:14px;">
+            <table id="mapPreviewTable"></table>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" id="mapConfirmBtn">ยืนยันนำเข้า</button>
+            <button class="btn btn-ghost" id="mapCancelBtn">ยกเลิก</button>
+          </div>
+        </div>
       </div>
 
       <div class="filter-bar">
@@ -797,7 +826,7 @@ document.getElementById('rosterSearchBox').addEventListener('input', (e)=>{
 document.getElementById('rosterRefreshBtn').addEventListener('click', renderRosterPage);
 
 function parseRosterRows(rawRows){
-  // rawRows: array of arrays [id, name, group]
+  // rawRows: array of arrays [id, name, group] using fixed column order (used by the plain-paste box only)
   const out = [];
   for(const row of rawRows){
     const id = String(row[0] ?? '').trim();
@@ -805,7 +834,6 @@ function parseRosterRows(rawRows){
     const group = String(row[2] ?? '').trim();
     if(!id || !name) continue;
     if(!/^[0-9A-Za-z].*/.test(id)) continue;
-    // skip likely header row
     if(/รหัส|student.?id/i.test(id) || /ชื่อ|name/i.test(name)) continue;
     out.push({ student_id: id, name, group_name: group || null });
   }
@@ -849,6 +877,80 @@ document.getElementById('importPasteBtn').addEventListener('click', async ()=>{
   if(res.ok){ document.getElementById('rosterPasteText').value=''; toast('นำเข้ารายชื่อสำเร็จ'); renderRosterPage(); }
 });
 
+// ===== COLUMN MAPPING (used by Excel + Google Sheets imports) =====
+let pendingRawRows = null;
+
+function guessColumnRoles(rawRows){
+  const sample = rawRows.slice(0, Math.min(20, rawRows.length));
+  const colCount = Math.max(...sample.map(r=>r.length), 1);
+  const idScore = new Array(colCount).fill(0);
+  const lenScore = new Array(colCount).fill(0);
+  sample.forEach(row=>{
+    for(let c=0;c<colCount;c++){
+      const v = String(row[c] ?? '').trim();
+      if(/^\d{4,}$/.test(v)) idScore[c]++;
+      lenScore[c] += v.length;
+    }
+  });
+  let idCol = idScore.indexOf(Math.max(...idScore));
+  let nameCol = 0, bestLen = -1;
+  for(let c=0;c<colCount;c++){ if(c!==idCol && lenScore[c]>bestLen){ bestLen=lenScore[c]; nameCol=c; } }
+  return { colCount, idCol, nameCol };
+}
+
+function showMappingPanel(rawRows, sourceLabel){
+  pendingRawRows = rawRows;
+  const { colCount, idCol, nameCol } = guessColumnRoles(rawRows);
+  const colLabel = (i)=> `คอลัมน์ ${i+1}` + (rawRows[0] && rawRows[0][i]!==undefined ? ` (เช่น "${String(rawRows[1] ? rawRows[1][i] : rawRows[0][i]).slice(0,20)}")` : '');
+  const optionsHtml = (selected)=> Array.from({length:colCount}, (_,i)=>
+    `<option value="${i}" ${i===selected?'selected':''}>${escapeHtml(colLabel(i))}</option>`).join('') + `<option value="-1" ${selected===-1?'selected':''}>— ไม่ใช้ —</option>`;
+
+  document.getElementById('mapColId').innerHTML = optionsHtml(idCol);
+  document.getElementById('mapColName').innerHTML = optionsHtml(nameCol);
+  document.getElementById('mapColGroup').innerHTML = optionsHtml(-1);
+
+  const previewRows = rawRows.slice(0, 5);
+  document.getElementById('mapPreviewTable').innerHTML = `
+    <thead><tr>${Array.from({length:colCount},(_,i)=>`<th>คอลัมน์ ${i+1}</th>`).join('')}</tr></thead>
+    <tbody>${previewRows.map(r=>`<tr>${Array.from({length:colCount},(_,i)=>`<td>${escapeHtml(String(r[i]??''))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+  document.getElementById('rosterImportStatus').textContent = `อ่านจาก${sourceLabel}ได้ ${rawRows.length} แถว — ตรวจสอบคอลัมน์ด้านล่างก่อนยืนยัน`;
+  document.getElementById('rosterMappingPanel').style.display = 'block';
+}
+
+document.getElementById('mapCancelBtn').addEventListener('click', ()=>{
+  pendingRawRows = null;
+  document.getElementById('rosterMappingPanel').style.display = 'none';
+  document.getElementById('rosterImportStatus').textContent = '';
+});
+
+document.getElementById('mapConfirmBtn').addEventListener('click', async ()=>{
+  if(!pendingRawRows) return;
+  const idCol = parseInt(document.getElementById('mapColId').value, 10);
+  const nameCol = parseInt(document.getElementById('mapColName').value, 10);
+  const groupCol = parseInt(document.getElementById('mapColGroup').value, 10);
+  const skipHeader = document.getElementById('mapSkipHeader').checked;
+  if(idCol < 0 || nameCol < 0){ toast('กรุณาเลือกคอลัมน์รหัสนักศึกษาและชื่ออย่างน้อย'); return; }
+  let rows = pendingRawRows;
+  if(skipHeader) rows = rows.slice(1);
+  const parsed = rows.map(r=>({
+    student_id: String(r[idCol] ?? '').trim(),
+    name: String(r[nameCol] ?? '').trim(),
+    group_name: groupCol >= 0 ? (String(r[groupCol] ?? '').trim() || null) : null
+  })).filter(r => r.student_id && r.name);
+
+  const status = document.getElementById('rosterImportStatus');
+  status.textContent = 'กำลังบันทึก...';
+  const res = await upsertRoster(parsed);
+  status.textContent = res.msg || (`นำเข้าสำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
+  if(res.ok){
+    toast('นำเข้ารายชื่อสำเร็จ');
+    document.getElementById('rosterMappingPanel').style.display = 'none';
+    pendingRawRows = null;
+    renderRosterPage();
+  }
+});
+
 document.getElementById('rosterExcelInput').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
@@ -859,15 +961,37 @@ document.getElementById('rosterExcelInput').addEventListener('change', async (e)
     const wb = XLSX.read(buf, {type:'array'});
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rawRows = XLSX.utils.sheet_to_json(sheet, {header:1});
-    const rows = parseRosterRows(rawRows);
-    const res = await upsertRoster(rows);
-    status.textContent = res.msg || (`นำเข้าจาก Excel สำเร็จ ${res.count} คน` + (res.skipped ? ` (ข้ามรายการซ้ำ ${res.skipped} แถว)` : ''));
-    if(res.ok){ toast('นำเข้าจาก Excel สำเร็จ'); renderRosterPage(); }
+    if(!rawRows.length){ status.textContent = 'ไม่พบข้อมูลในไฟล์'; return; }
+    showMappingPanel(rawRows, 'ไฟล์ Excel');
   }catch(err){
     status.textContent = 'อ่านไฟล์ไม่สำเร็จ: ' + err.message;
   }
   e.target.value = '';
 });
+
+function parseCSV(text){
+  // Proper CSV parser: handles quoted fields (with embedded commas/newlines) correctly,
+  // unlike a naive split(',') which breaks whenever a cell contains a comma.
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\r'){ /* ignore */ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ''));
+}
 
 document.getElementById('importSheetBtn').addEventListener('click', async ()=>{
   const url = document.getElementById('rosterSheetUrl').value.trim();
@@ -877,16 +1001,16 @@ document.getElementById('importSheetBtn').addEventListener('click', async ()=>{
   try{
     const res = await fetch(url);
     if(!res.ok) throw new Error('โหลดลิงก์ไม่สำเร็จ (สถานะ ' + res.status + ')');
-    const text = await res.text();
-    const rawRows = text.split('\n').map(l=>l.replace(/\r$/,'').split(',').map(c=>c.replace(/^"|"$/g,'')));
-    const rows = parseRosterRows(rawRows);
-    const r2 = await upsertRoster(rows);
-    status.textContent = r2.msg || (`ดึงจาก Google Sheets สำเร็จ ${r2.count} คน` + (r2.skipped ? ` (ข้ามรายการซ้ำ ${r2.skipped} แถว)` : ''));
-    if(r2.ok){ toast('ดึงจาก Google Sheets สำเร็จ'); renderRosterPage(); }
+    const buf = await res.arrayBuffer();
+    const text = new TextDecoder('utf-8').decode(buf); // บังคับอ่านเป็น UTF-8 กันข้อความไทยเพี้ยน
+    const rawRows = parseCSV(text);
+    if(!rawRows.length){ status.textContent = 'ไม่พบข้อมูลจากลิงก์นี้'; return; }
+    showMappingPanel(rawRows, 'Google Sheets');
   }catch(err){
     status.textContent = 'ดึงข้อมูลไม่สำเร็จ: ' + err.message + ' (เช็คว่า publish เป็น CSV แล้วหรือยัง)';
   }
 });
+
 
 checkAuth();
 </script>
