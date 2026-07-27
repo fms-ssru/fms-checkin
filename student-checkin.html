@@ -147,7 +147,7 @@ const SUPABASE_URL = 'https://mgtxmannvshnwtflufph.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndHhtYW5udnNobnd0Zmx1ZnBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4NzgxMDEsImV4cCI6MjEwMDQ1NDEwMX0.ypUf_mPy4gqJUt6ScQXP21Q0x11GLvMvfCqzxSAr5yA';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const state = { step:'login', mode:'checkin', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null, leaveHistory:null, leaveError:null, leaveForm:{ type:'ลาป่วย' } };
+const state = { step:'login', mode:'checkin', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null, leaveHistory:null, leaveError:null, leaveForm:{ type:'ลาป่วย' }, myCourses:null };
 
 function render(){
   const area = document.getElementById('cardArea');
@@ -249,7 +249,11 @@ function renderLeaveStep(){
     ${state.leaveError ? `<div class="error-box">${escapeHtml(state.leaveError)}</div>` : ''}
     <div class="field">
       <label>รายวิชา</label>
-      <input type="text" id="leaveSubject" placeholder="เช่น MK214 การตลาดดิจิทัล" value="${escapeHtml(f.subject||'')}">
+      <select id="leaveCourseSelect">
+        <option value="">-- เลือกวิชา --</option>
+        ${(state.myCourses||[]).map(c=>`<option value="${c.id}" ${f.course_id===c.id?'selected':''}>${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`).join('')}
+      </select>
+      ${state.myCourses !== null && !state.myCourses.length ? '<p class="muted" style="margin-top:6px;">ไม่พบวิชาที่ลงทะเบียนไว้ — ติดต่ออาจารย์ให้เพิ่มชื่อเข้าหมู่เรียนก่อน</p>' : ''}
     </div>
     <div class="field">
       <label>วันที่ลา</label>
@@ -282,7 +286,7 @@ function renderLeaveHistoryList(){
   const statusLabel = { pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ' };
   return state.leaveHistory.map(l => `
     <div class="leave-item">
-      <div class="lt">${escapeHtml(l.subject_name || l.subject_code || 'ไม่ระบุวิชา')} <span class="leave-badge ${l.status}">${statusLabel[l.status]||l.status}</span></div>
+      <div class="lt">${l.courses ? escapeHtml(l.courses.name)+' ('+escapeHtml(l.courses.code)+')' : 'ไม่ระบุวิชา'} <span class="leave-badge ${l.status}">${statusLabel[l.status]||l.status}</span></div>
       <div class="lm">
         ${escapeHtml(l.leave_type)} · วันที่ ${escapeHtml(l.leave_date)}<br>
         ${l.reason ? escapeHtml(l.reason) + '<br>' : ''}
@@ -344,9 +348,10 @@ function bindEvents(){
   area.querySelectorAll('[data-switch-mode]').forEach(btn=>{
     btn.onclick = ()=>{
       state.mode = btn.dataset.switchMode;
-      if(state.mode==='leave' && state.leaveHistory===null){
+      if(state.mode==='leave'){
         render();
-        loadLeaveHistory();
+        if(state.leaveHistory===null) loadLeaveHistory();
+        if(state.myCourses===null) loadMyCourses();
       } else {
         render();
       }
@@ -355,7 +360,9 @@ function bindEvents(){
 
   const leaveSubmitBtn = document.getElementById('leaveSubmitBtn');
   if(leaveSubmitBtn){ leaveSubmitBtn.onclick = handleLeaveSubmit; }
-  ['leaveSubject','leaveDate','leaveType','leaveReason','leaveAttachment'].forEach(id=>{
+  const courseSel = document.getElementById('leaveCourseSelect');
+  if(courseSel){ courseSel.onchange = ()=>{ state.leaveForm.course_id = courseSel.value; }; }
+  ['leaveDate','leaveType','leaveReason','leaveAttachment'].forEach(id=>{
     const el = document.getElementById(id);
     if(el){ el.oninput = ()=>{
       const key = id.replace('leave','').replace(/^./, s=>s.toLowerCase());
@@ -364,8 +371,25 @@ function bindEvents(){
   });
 }
 
+async function loadMyCourses(){
+  const { data, error } = await sb.from('enrollments')
+    .select('section_id, sections(course_id, courses(id, code, name))')
+    .eq('student_id', state.profile.student_id);
+  if(error){ state.myCourses = []; return; }
+  const seen = new Map();
+  (data||[]).forEach(e=>{
+    const c = e.sections?.courses;
+    if(c && !seen.has(c.id)) seen.set(c.id, c);
+  });
+  state.myCourses = Array.from(seen.values()).sort((a,b)=>a.code.localeCompare(b.code));
+  const sel = document.getElementById('leaveCourseSelect');
+  if(sel){
+    sel.innerHTML = '<option value="">-- เลือกวิชา --</option>' + state.myCourses.map(c=>`<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.code)})</option>`).join('');
+  }
+}
+
 async function loadLeaveHistory(){
-  const { data, error } = await sb.from('leave_requests').select('*').eq('student_email', state.profile.email).order('created_at', {ascending:false});
+  const { data, error } = await sb.from('leave_requests').select('*, courses(code, name)').eq('student_email', state.profile.email).order('created_at', {ascending:false});
   state.leaveHistory = error ? [] : data;
   const listEl = document.getElementById('leaveHistoryList');
   if(listEl) listEl.innerHTML = renderLeaveHistoryList();
@@ -373,11 +397,12 @@ async function loadLeaveHistory(){
 
 async function handleLeaveSubmit(){
   const f = state.leaveForm;
-  const subject = (document.getElementById('leaveSubject').value || '').trim();
+  const courseId = document.getElementById('leaveCourseSelect').value;
   const date = document.getElementById('leaveDate').value;
   const type = document.getElementById('leaveType').value;
   const reason = (document.getElementById('leaveReason').value || '').trim();
   const attachment = (document.getElementById('leaveAttachment').value || '').trim();
+  if(!courseId){ state.leaveError = 'กรุณาเลือกรายวิชา'; render(); return; }
   if(!date || !type){ state.leaveError = 'กรุณาเลือกวันที่และประเภทการลา'; render(); return; }
   const btn = document.getElementById('leaveSubmitBtn');
   btn.disabled = true; btn.textContent = 'กำลังส่ง...';
@@ -385,7 +410,7 @@ async function handleLeaveSubmit(){
     student_email: state.profile.email,
     student_id: state.profile.student_id,
     student_name: state.profile.name || state.profile.email,
-    subject_name: subject || null,
+    course_id: courseId,
     leave_date: date,
     leave_type: type,
     reason: reason || null,
