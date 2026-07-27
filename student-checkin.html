@@ -234,6 +234,7 @@ function renderConfirmStep(){
       </div>
     </div>
     ${state.confirmError ? `<div class="error-box">${escapeHtml(state.confirmError)}</div>` : ''}
+    ${(s.gpsLat!=null && s.gpsLng!=null && s.gpsRadius!=null) ? `<p class="muted" style="margin-bottom:10px;">📍 คาบนี้ต้องเปิดสิทธิ์ตำแหน่ง (GPS) เพื่อยืนยันว่าอยู่ในระยะห้องเรียน</p>` : ''}
     <p class="muted" style="margin-bottom:16px;">ยืนยันว่าเป็นคุณจริง แล้วกดเช็คชื่อ</p>
     <button class="btn btn-primary" id="confirmSubmitBtn">ยืนยันเช็คชื่อ</button>
     <button class="btn btn-ghost" id="backToPinBtn">← กลับไปกรอก PIN ใหม่</button>
@@ -613,7 +614,7 @@ async function handlePinSubmit(){
   const btn = document.getElementById('pinSubmitBtn');
   btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
   const { data, error } = await sb.from('sessions')
-    .select('*, sections(name, room, courses(code, name))')
+    .select('*, sections(name, room, latitude, longitude, radius_meters, courses(code, name))')
     .eq('status','open').eq('pin', pin).limit(1);
   btn.disabled = false; btn.textContent = 'ตรวจสอบ PIN';
   if(error || !data || !data.length){
@@ -644,17 +645,56 @@ async function handlePinSubmit(){
     subject: s.sections?.courses?.name || '(ไม่พบวิชา)',
     code: s.sections?.courses?.code || '',
     sectionName: s.sections?.name || '-',
-    room: s.room || s.sections?.room || '-'
+    room: s.room || s.sections?.room || '-',
+    gpsLat: s.sections?.latitude ?? null,
+    gpsLng: s.sections?.longitude ?? null,
+    gpsRadius: s.sections?.radius_meters ?? null
   };
   state.pinError = null;
   state.step = 'confirm';
   render();
 }
 
+function distanceMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI/180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function getPosition(){
+  return new Promise((resolve, reject)=>{
+    if(!navigator.geolocation){ reject(new Error('เบราว์เซอร์นี้ไม่รองรับตำแหน่ง GPS')); return; }
+    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
+  });
+}
+
 async function handleConfirmSubmit(){
   const s = state.matchedSession;
   const btn = document.getElementById('confirmSubmitBtn');
   btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+
+  if(s.gpsLat != null && s.gpsLng != null && s.gpsRadius != null){
+    btn.textContent = 'กำลังตรวจสอบตำแหน่ง...';
+    try{
+      const pos = await getPosition();
+      const dist = distanceMeters(s.gpsLat, s.gpsLng, pos.coords.latitude, pos.coords.longitude);
+      if(dist > s.gpsRadius){
+        btn.disabled = false; btn.textContent = 'ยืนยันเช็คชื่อ';
+        state.confirmError = `อยู่นอกระยะที่กำหนด (ห่างประมาณ ${Math.round(dist)} เมตร จากระยะที่อนุญาต ${s.gpsRadius} เมตร) กรุณาเช็คชื่อในห้องเรียน`;
+        render();
+        return;
+      }
+    }catch(err){
+      btn.disabled = false; btn.textContent = 'ยืนยันเช็คชื่อ';
+      state.confirmError = 'คาบนี้กำหนดให้ต้องเปิดตำแหน่ง GPS จึงจะเช็คชื่อได้ กรุณาอนุญาตการเข้าถึงตำแหน่งของเบราว์เซอร์แล้วลองใหม่';
+      render();
+      return;
+    }
+    btn.textContent = 'กำลังบันทึก...';
+  }
+
   const status = computeStatus(s);
   const { error } = await sb.from('attendance').insert({
     session_id: s.id,

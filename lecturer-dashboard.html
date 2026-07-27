@@ -733,6 +733,62 @@ document.getElementById('newSectionSelect').addEventListener('change', (e)=>{
 });
 
 // ===== COURSES / SECTIONS =====
+function renderGpsEditBox(targetWrap, sec){
+  targetWrap.innerHTML = `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="muted" style="margin-bottom:10px;">ตั้งค่าตำแหน่ง GPS สำหรับหมู่ "${escapeHtml(sec.name)}" (เว้นว่างได้ถ้าไม่ต้องการจำกัดระยะ)</div>
+      <div class="filter-bar" style="margin-bottom:8px;">
+        <input type="text" id="gpsLat-${sec.id}" placeholder="ละติจูด" value="${sec.latitude!=null?sec.latitude:''}" style="width:150px;">
+        <input type="text" id="gpsLng-${sec.id}" placeholder="ลองจิจูด" value="${sec.longitude!=null?sec.longitude:''}" style="width:150px;">
+        <input type="number" id="gpsRadius-${sec.id}" placeholder="ระยะ (เมตร)" value="${sec.radius_meters!=null?sec.radius_meters:''}" style="width:150px;">
+        <button class="btn btn-ghost btn-sm" id="gpsUseLocBtn-${sec.id}">📍 ใช้ตำแหน่งปัจจุบัน</button>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary btn-sm" id="gpsSaveBtn-${sec.id}">บันทึก</button>
+        <button class="btn btn-ghost btn-sm" id="gpsClearBtn-${sec.id}">ลบการตั้งค่า GPS</button>
+      </div>
+    </div>`;
+
+  document.getElementById(`gpsUseLocBtn-${sec.id}`).onclick = ()=>{
+    if(!navigator.geolocation){ toast('เบราว์เซอร์นี้ไม่รองรับตำแหน่ง GPS'); return; }
+    const btn = document.getElementById(`gpsUseLocBtn-${sec.id}`);
+    btn.disabled = true; btn.textContent = 'กำลังหาตำแหน่ง...';
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        document.getElementById(`gpsLat-${sec.id}`).value = pos.coords.latitude.toFixed(6);
+        document.getElementById(`gpsLng-${sec.id}`).value = pos.coords.longitude.toFixed(6);
+        btn.disabled = false; btn.textContent = '📍 ใช้ตำแหน่งปัจจุบัน';
+      },
+      (err)=>{ btn.disabled = false; btn.textContent = '📍 ใช้ตำแหน่งปัจจุบัน'; toast('หาตำแหน่งไม่สำเร็จ: ' + err.message); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+  document.getElementById(`gpsSaveBtn-${sec.id}`).onclick = async ()=>{
+    const lat = document.getElementById(`gpsLat-${sec.id}`).value.trim();
+    const lng = document.getElementById(`gpsLng-${sec.id}`).value.trim();
+    const radius = document.getElementById(`gpsRadius-${sec.id}`).value.trim();
+    if((lat && !lng) || (!lat && lng)){ toast('กรุณากรอกทั้งละติจูดและลองจิจูด หรือเว้นว่างทั้งคู่'); return; }
+    const { error } = await sb.from('sections').update({
+      latitude: lat ? parseFloat(lat) : null,
+      longitude: lng ? parseFloat(lng) : null,
+      radius_meters: radius ? parseInt(radius,10) : null
+    }).eq('id', sec.id);
+    if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
+    toast('บันทึกตำแหน่ง GPS แล้ว');
+    targetWrap.innerHTML = '';
+    targetWrap.dataset.openFor = '';
+    renderCoursesPage();
+  };
+  document.getElementById(`gpsClearBtn-${sec.id}`).onclick = async ()=>{
+    const { error } = await sb.from('sections').update({ latitude:null, longitude:null, radius_meters:null }).eq('id', sec.id);
+    if(error){ toast('ลบไม่สำเร็จ: ' + error.message); return; }
+    toast('ลบการตั้งค่า GPS แล้ว');
+    targetWrap.innerHTML = '';
+    targetWrap.dataset.openFor = '';
+    renderCoursesPage();
+  };
+}
+
 async function renderSectionRosterBox(targetWrap, sec){
   targetWrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
   const { data: students } = await sb.from('roster').select('student_id, name').eq('section_id', sec.id).order('name');
@@ -809,23 +865,52 @@ async function renderCoursesPage(){
           <div class="session-chip" style="cursor:default;">
             <div class="lbl">${escapeHtml(s.name)}</div>
             <div class="dt">${s.room?escapeHtml(s.room)+' · ':''}${countBySection[s.id]||0} คนลงทะเบียน</div>
-            <div style="margin-top:8px; display:flex; gap:6px;">
+            <div class="dt" style="margin-top:3px;">${(s.latitude!=null && s.longitude!=null) ? `📍 จำกัดระยะ ${s.radius_meters||'-'} ม.` : '<span class="muted">ไม่ได้ตั้ง GPS</span>'}</div>
+            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
               <button class="btn btn-ghost btn-sm" data-view-roster="${s.id}" style="padding:5px 10px; font-size:12px;">ดูรายชื่อ</button>
+              <button class="btn btn-ghost btn-sm" data-edit-gps="${s.id}" style="padding:5px 10px; font-size:12px;">ตั้ง GPS</button>
               <button class="btn btn-ghost btn-sm" data-del-section="${s.id}" style="color:var(--red); border-color:var(--red); padding:5px 10px; font-size:12px;">ลบหมู่</button>
             </div>
           </div>`).join('') || '<div class="muted">ยังไม่มีหมู่เรียน</div>'}
         </div>
         <div id="sectionRosterWrap-${c.id}"></div>
         <hr class="divider">
-        <div class="filter-bar" style="margin-bottom:0;">
+        <div class="filter-bar" style="margin-bottom:8px;">
           <input type="text" data-newsec-name="${c.id}" placeholder="ชื่อหมู่ เช่น Sec 1" style="width:120px;">
           <input type="text" data-newsec-room="${c.id}" placeholder="ห้อง" style="width:100px;">
           <input type="time" data-newsec-start="${c.id}">
           <input type="time" data-newsec-end="${c.id}">
-          <button class="btn btn-primary btn-sm" data-addsec="${c.id}">+ เพิ่มหมู่เรียน</button>
         </div>
+        <div class="filter-bar" style="margin-bottom:8px;">
+          <input type="text" data-newsec-lat="${c.id}" placeholder="ละติจูด (ไม่บังคับ)" style="width:150px;">
+          <input type="text" data-newsec-lng="${c.id}" placeholder="ลองจิจูด (ไม่บังคับ)" style="width:150px;">
+          <input type="number" data-newsec-radius="${c.id}" placeholder="ระยะที่อนุญาต (เมตร)" style="width:170px;">
+          <button class="btn btn-ghost btn-sm" data-use-my-location="${c.id}">📍 ใช้ตำแหน่งปัจจุบัน</button>
+        </div>
+        <button class="btn btn-primary btn-sm" data-addsec="${c.id}">+ เพิ่มหมู่เรียน</button>
       </div>`;
   }).join('');
+
+  wrap.querySelectorAll('[data-use-my-location]').forEach(btn=>{
+    btn.onclick = ()=>{
+      if(!navigator.geolocation){ toast('เบราว์เซอร์นี้ไม่รองรับตำแหน่ง GPS'); return; }
+      const courseId = btn.dataset.useMyLocation;
+      btn.disabled = true; btn.textContent = 'กำลังหาตำแหน่ง...';
+      navigator.geolocation.getCurrentPosition(
+        (pos)=>{
+          wrap.querySelector(`[data-newsec-lat="${courseId}"]`).value = pos.coords.latitude.toFixed(6);
+          wrap.querySelector(`[data-newsec-lng="${courseId}"]`).value = pos.coords.longitude.toFixed(6);
+          btn.disabled = false; btn.textContent = '📍 ใช้ตำแหน่งปัจจุบัน';
+          toast('ดึงตำแหน่งปัจจุบันแล้ว');
+        },
+        (err)=>{
+          btn.disabled = false; btn.textContent = '📍 ใช้ตำแหน่งปัจจุบัน';
+          toast('หาตำแหน่งไม่สำเร็จ: ' + err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    };
+  });
 
   wrap.querySelectorAll('[data-addsec]').forEach(btn=>{
     btn.onclick = async ()=>{
@@ -834,8 +919,17 @@ async function renderCoursesPage(){
       const room = wrap.querySelector(`[data-newsec-room="${courseId}"]`).value.trim();
       const start = wrap.querySelector(`[data-newsec-start="${courseId}"]`).value;
       const end = wrap.querySelector(`[data-newsec-end="${courseId}"]`).value;
+      const lat = wrap.querySelector(`[data-newsec-lat="${courseId}"]`).value.trim();
+      const lng = wrap.querySelector(`[data-newsec-lng="${courseId}"]`).value.trim();
+      const radius = wrap.querySelector(`[data-newsec-radius="${courseId}"]`).value.trim();
       if(!name){ toast('กรุณากรอกชื่อหมู่เรียน'); return; }
-      const { error } = await sb.from('sections').insert({ course_id: courseId, name, room: room||null, default_start: start||null, default_end: end||null });
+      if((lat && !lng) || (!lat && lng)){ toast('กรุณากรอกทั้งละติจูดและลองจิจูด หรือเว้นว่างทั้งคู่'); return; }
+      const { error } = await sb.from('sections').insert({
+        course_id: courseId, name, room: room||null, default_start: start||null, default_end: end||null,
+        latitude: lat ? parseFloat(lat) : null,
+        longitude: lng ? parseFloat(lng) : null,
+        radius_meters: radius ? parseInt(radius, 10) : null
+      });
       if(error){ toast('เพิ่มหมู่เรียนไม่สำเร็จ: ' + error.message); return; }
       toast('เพิ่มหมู่เรียนแล้ว');
       renderCoursesPage();
@@ -846,13 +940,27 @@ async function renderCoursesPage(){
       const sectionId = btn.dataset.viewRoster;
       const sec = (sections||[]).find(s=>s.id===sectionId);
       const targetWrap = document.getElementById(`sectionRosterWrap-${sec.course_id}`);
-      if(targetWrap.dataset.openFor === sectionId){
+      if(targetWrap.dataset.openFor === 'roster-'+sectionId){
         targetWrap.innerHTML = '';
         targetWrap.dataset.openFor = '';
         return;
       }
-      targetWrap.dataset.openFor = sectionId;
+      targetWrap.dataset.openFor = 'roster-'+sectionId;
       await renderSectionRosterBox(targetWrap, sec);
+    };
+  });
+  wrap.querySelectorAll('[data-edit-gps]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const sectionId = btn.dataset.editGps;
+      const sec = (sections||[]).find(s=>s.id===sectionId);
+      const targetWrap = document.getElementById(`sectionRosterWrap-${sec.course_id}`);
+      if(targetWrap.dataset.openFor === 'gps-'+sectionId){
+        targetWrap.innerHTML = '';
+        targetWrap.dataset.openFor = '';
+        return;
+      }
+      targetWrap.dataset.openFor = 'gps-'+sectionId;
+      renderGpsEditBox(targetWrap, sec);
     };
   });
   wrap.querySelectorAll('[data-del-section]').forEach(btn=>{
