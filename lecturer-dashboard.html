@@ -918,14 +918,17 @@ function stopLiveTimers(){
   qrTimerId = null; liveTableTimerId = null;
 }
 
+const STUDENT_CHECKIN_URL = 'https://fms-ssru.github.io/fms-checkin/student-checkin.html';
+
 function renderQr(s){
   document.getElementById('pinDisplay').innerHTML = s.pin.split('').map(d=>`<div class="pin-digit">${d}</div>`).join('');
   const holder = document.getElementById('qrHolder');
   holder.innerHTML = '';
+  const deepLink = `${STUDENT_CHECKIN_URL}?pin=${s.pin}`;
   const img = document.createElement('img');
-  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=172x172&margin=0&data=' + encodeURIComponent(s.pin);
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=172x172&margin=0&data=' + encodeURIComponent(deepLink);
   img.width = 172; img.height = 172;
-  img.alt = 'QR PIN ' + s.pin;
+  img.alt = 'QR เช็คชื่อ PIN ' + s.pin;
   img.onerror = function(){
     holder.innerHTML = '<div class="qc" style="font-size:32px;">'+s.pin+'</div>';
   };

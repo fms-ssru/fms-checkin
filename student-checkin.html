@@ -105,6 +105,9 @@
   .leave-badge.pending{background:var(--orange-bg); color:var(--orange);}
   .leave-badge.approved{background:var(--green-bg); color:var(--green);}
   .leave-badge.rejected{background:var(--red-bg); color:var(--red);}
+  .leave-badge.present{background:var(--green-bg); color:var(--green);}
+  .leave-badge.late{background:var(--orange-bg); color:var(--orange);}
+  .leave-badge.onleave{background:var(--blue-light); color:var(--blue-dark);}
 </style>
 </head>
 <body>
@@ -147,7 +150,7 @@ const SUPABASE_URL = 'https://mgtxmannvshnwtflufph.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndHhtYW5udnNobnd0Zmx1ZnBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4NzgxMDEsImV4cCI6MjEwMDQ1NDEwMX0.ypUf_mPy4gqJUt6ScQXP21Q0x11GLvMvfCqzxSAr5yA';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const state = { step:'login', mode:'checkin', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null, leaveHistory:null, leaveError:null, leaveForm:{ type:'ลาป่วย' }, myCourses:null };
+const state = { step:'login', mode:'checkin', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null, leaveHistory:null, leaveError:null, leaveForm:{ type:'ลาป่วย' }, myCourses:null, leaveShown:5, attHistory:null, attShown:5, histDateFrom:'', histDateTo:'' };
 
 function render(){
   const area = document.getElementById('cardArea');
@@ -157,6 +160,8 @@ function render(){
     if(state.step==='pin') inner = renderPinStep();
     else if(state.step==='confirm') inner = renderConfirmStep();
     else if(state.step==='done') inner = renderDoneStep();
+  } else if(state.mode === 'history'){
+    inner = renderHistoryStep();
   } else {
     inner = renderLeaveStep();
   }
@@ -169,6 +174,7 @@ function renderModeTabs(){
     <div class="mode-tabs">
       <button data-switch-mode="checkin" class="${state.mode==='checkin'?'active':''}">เช็คชื่อ</button>
       <button data-switch-mode="leave" class="${state.mode==='leave'?'active':''}">ขอลา</button>
+      <button data-switch-mode="history" class="${state.mode==='history'?'active':''}">ประวัติ</button>
     </div>`;
 }
 
@@ -176,6 +182,7 @@ function renderLoginStep(){
   return `
     <h2 class="step-title">เข้าสู่ระบบ</h2>
     <p class="muted" style="margin-bottom:20px;">ใช้บัญชี Google มหาวิทยาลัย (@ssru.ac.th) ของคุณ</p>
+    ${/^\d{4}$/.test(urlPin) ? `<div class="session-info" style="margin-bottom:16px;"><div class="mt">สแกนมาจาก QR เช็คชื่อ — เข้าสู่ระบบครั้งนี้ก่อน ครั้งต่อไปจะเช็คชื่อให้อัตโนมัติทันทีไม่ต้องล็อกอินซ้ำ</div></div>` : ''}
     ${state.loginError ? `<div class="error-box">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-primary" id="googleLoginBtn">เข้าสู่ระบบด้วย Google</button>
   `;
@@ -280,11 +287,72 @@ function renderLeaveStep(){
   `;
 }
 
+function renderHistoryStep(){
+  return `
+    <div class="profile-row">
+      <div class="av">${initials(state.profile.name)}</div>
+      <div>
+        <div class="nm">${escapeHtml(state.profile.name || state.profile.email)}</div>
+        <div class="em">${escapeHtml(state.profile.email)}</div>
+      </div>
+    </div>
+    <h2 class="step-title" style="text-align:left;">ประวัติการเช็คชื่อ</h2>
+    <div class="field" style="display:flex; gap:8px; align-items:flex-end;">
+      <div style="flex:1;">
+        <label>จากวันที่</label>
+        <input type="date" id="histDateFrom" value="${escapeHtml(state.histDateFrom)}">
+      </div>
+      <div style="flex:1;">
+        <label>ถึงวันที่</label>
+        <input type="date" id="histDateTo" value="${escapeHtml(state.histDateTo)}">
+      </div>
+      <button class="btn btn-outline" id="histFilterBtn" style="width:auto; padding:10px 16px;">กรอง</button>
+    </div>
+    <div id="attHistoryList" style="margin-top:14px;">${renderAttHistoryList()}</div>
+  `;
+}
+
+function renderAttHistoryList(){
+  if(state.attHistory === null) return `<p class="muted" style="text-align:left;">กำลังโหลด...</p>`;
+  let rows = state.attHistory;
+  if(state.histDateFrom) rows = rows.filter(r => r.sessionDate >= state.histDateFrom);
+  if(state.histDateTo) rows = rows.filter(r => r.sessionDate <= state.histDateTo);
+  if(!rows.length) return `<p class="muted" style="text-align:left;">ไม่พบประวัติการเช็คชื่อ</p>`;
+  const statusClass = { 'มา':'present', 'สาย':'late', 'ลา':'onleave', 'ขาด':'rejected' };
+  const shown = rows.slice(0, state.attShown);
+  const itemsHtml = shown.map(r => `
+    <div class="leave-item">
+      <div class="lt">${escapeHtml(r.subjectLabel)} <span class="leave-badge ${statusClass[r.status]||''}">${escapeHtml(r.status)}</span></div>
+      <div class="lm">วันที่ ${escapeHtml(r.sessionDate)} · เช็คชื่อเวลา ${fmtTime(r.checked_at)}</div>
+    </div>`).join('');
+  const moreBtn = rows.length > state.attShown
+    ? `<button class="btn btn-ghost" id="histLoadMoreBtn">โหลดเพิ่ม (เหลืออีก ${rows.length - state.attShown} รายการ)</button>`
+    : (state.attShown > 5 ? `<button class="btn btn-ghost" id="histCollapseBtn">ย่อกลับ</button>` : '');
+  return itemsHtml + moreBtn;
+}
+
+async function loadAttendanceHistory(){
+  const { data, error } = await sb.from('attendance')
+    .select('*, sessions(date, start_time, sections(name, courses(code,name)))')
+    .eq('student_email', state.profile.email)
+    .order('checked_at', {ascending:false});
+  if(error){ state.attHistory = []; const el = document.getElementById('attHistoryList'); if(el) el.innerHTML = renderAttHistoryList(); return; }
+  state.attHistory = (data||[]).map(r=>({
+    status: r.status,
+    checked_at: r.checked_at,
+    sessionDate: r.sessions?.date || '',
+    subjectLabel: r.sessions?.sections ? `${r.sessions.sections.courses?.name||'?'} (${r.sessions.sections.courses?.code||'?'}) · ${r.sessions.sections.name}` : 'ไม่ทราบวิชา'
+  }));
+  const el = document.getElementById('attHistoryList');
+  if(el) el.innerHTML = renderAttHistoryList();
+}
+
 function renderLeaveHistoryList(){
   if(state.leaveHistory === null) return `<p class="muted" style="text-align:left;">กำลังโหลด...</p>`;
   if(!state.leaveHistory.length) return `<p class="muted" style="text-align:left;">ยังไม่เคยยื่นขอลา</p>`;
   const statusLabel = { pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ' };
-  return state.leaveHistory.map(l => `
+  const shown = state.leaveHistory.slice(0, state.leaveShown);
+  const itemsHtml = shown.map(l => `
     <div class="leave-item">
       <div class="lt">${l.courses ? escapeHtml(l.courses.name)+' ('+escapeHtml(l.courses.code)+')' : 'ไม่ระบุวิชา'} <span class="leave-badge ${l.status}">${statusLabel[l.status]||l.status}</span></div>
       <div class="lm">
@@ -294,6 +362,10 @@ function renderLeaveHistoryList(){
         ${l.lecturer_comment ? `<i>ความเห็นอาจารย์: ${escapeHtml(l.lecturer_comment)}</i>` : ''}
       </div>
     </div>`).join('');
+  const moreBtn = state.leaveHistory.length > state.leaveShown
+    ? `<button class="btn btn-ghost" id="leaveLoadMoreBtn">โหลดเพิ่ม (เหลืออีก ${state.leaveHistory.length - state.leaveShown} รายการ)</button>`
+    : (state.leaveShown > 5 ? `<button class="btn btn-ghost" id="leaveCollapseBtn">ย่อกลับ</button>` : '');
+  return itemsHtml + moreBtn;
 }
 
 function bindEvents(){
@@ -352,11 +424,33 @@ function bindEvents(){
         render();
         if(state.leaveHistory===null) loadLeaveHistory();
         if(state.myCourses===null) loadMyCourses();
+      } else if(state.mode==='history'){
+        render();
+        if(state.attHistory===null) loadAttendanceHistory();
       } else {
         render();
       }
     };
   });
+
+  const histLoadMoreBtn = document.getElementById('histLoadMoreBtn');
+  if(histLoadMoreBtn){ histLoadMoreBtn.onclick = ()=>{ state.attShown += 5; render(); }; }
+  const histCollapseBtn = document.getElementById('histCollapseBtn');
+  if(histCollapseBtn){ histCollapseBtn.onclick = ()=>{ state.attShown = 5; render(); }; }
+  const histFilterBtn = document.getElementById('histFilterBtn');
+  if(histFilterBtn){
+    histFilterBtn.onclick = ()=>{
+      state.histDateFrom = document.getElementById('histDateFrom').value;
+      state.histDateTo = document.getElementById('histDateTo').value;
+      state.attShown = 5;
+      render();
+    };
+  }
+
+  const leaveLoadMoreBtn = document.getElementById('leaveLoadMoreBtn');
+  if(leaveLoadMoreBtn){ leaveLoadMoreBtn.onclick = ()=>{ state.leaveShown += 5; render(); }; }
+  const leaveCollapseBtn = document.getElementById('leaveCollapseBtn');
+  if(leaveCollapseBtn){ leaveCollapseBtn.onclick = ()=>{ state.leaveShown = 5; render(); }; }
 
   const leaveSubmitBtn = document.getElementById('leaveSubmitBtn');
   if(leaveSubmitBtn){ leaveSubmitBtn.onclick = handleLeaveSubmit; }
@@ -502,6 +596,9 @@ function computeStatus(s){
   }catch(e){ return 'มา'; }
 }
 
+const urlParams = new URLSearchParams(window.location.search);
+const urlPin = (urlParams.get('pin') || '').trim();
+
 async function checkAuth(){
   const { data: { session } } = await sb.auth.getSession();
   if(!session){ state.step='login'; render(); return; }
@@ -511,6 +608,12 @@ async function checkAuth(){
   }
   state.profile = profile;
   state.step = 'pin';
+  if(/^\d{4}$/.test(urlPin)){
+    state.pinDigits = urlPin.split('');
+    render();
+    await handlePinSubmit(); // มาจากลิงก์ QR แบบ deep-link — เช็คให้อัตโนมัติโดยไม่ต้องพิมพ์/กดซ้ำ
+    return;
+  }
   render();
 }
 sb.auth.onAuthStateChange((event)=>{
