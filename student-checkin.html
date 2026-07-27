@@ -85,6 +85,26 @@
   .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:9px; font-size:13.5px; z-index:1000; max-width:90vw; text-align:center;}
   .footnote{text-align:center; font-size:11px; color:var(--slate-light); margin-top:20px; line-height:1.6;}
   @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .mode-tabs{display:flex; gap:6px; background:var(--bg); padding:4px; border-radius:10px; margin-bottom:18px;}
+  .mode-tabs button{flex:1; background:transparent; border:none; font-family:'Prompt',sans-serif; font-weight:500; font-size:13px; padding:9px; border-radius:8px; cursor:pointer; color:var(--slate);}
+  .mode-tabs button.active{background:var(--white); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+
+  .field{margin-bottom:12px; text-align:left;}
+  .field label{display:block; font-size:12.5px; font-weight:500; color:var(--slate); margin-bottom:5px;}
+  .field input, .field select, .field textarea{
+    width:100%; font-family:'Prompt',sans-serif; font-size:14px; padding:10px 12px;
+    border-radius:10px; border:1.5px solid var(--line); background:var(--bg); color:var(--ink);
+  }
+  .field textarea{resize:vertical; min-height:70px;}
+
+  .leave-item{text-align:left; border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px;}
+  .leave-item .lt{font-weight:500; font-size:13.5px;}
+  .leave-item .lm{font-size:12px; color:var(--slate); margin-top:3px; line-height:1.6;}
+  .leave-badge{display:inline-block; font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; margin-left:6px;}
+  .leave-badge.pending{background:var(--orange-bg); color:var(--orange);}
+  .leave-badge.approved{background:var(--green-bg); color:var(--green);}
+  .leave-badge.rejected{background:var(--red-bg); color:var(--red);}
 </style>
 </head>
 <body>
@@ -127,15 +147,29 @@ const SUPABASE_URL = 'https://mgtxmannvshnwtflufph.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndHhtYW5udnNobnd0Zmx1ZnBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4NzgxMDEsImV4cCI6MjEwMDQ1NDEwMX0.ypUf_mPy4gqJUt6ScQXP21Q0x11GLvMvfCqzxSAr5yA';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const state = { step:'login', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null };
+const state = { step:'login', mode:'checkin', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null, leaveHistory:null, leaveError:null, leaveForm:{ type:'ลาป่วย' } };
 
 function render(){
   const area = document.getElementById('cardArea');
-  if(state.step==='login') area.innerHTML = renderLoginStep();
-  else if(state.step==='pin') area.innerHTML = renderPinStep();
-  else if(state.step==='confirm') area.innerHTML = renderConfirmStep();
-  else if(state.step==='done') area.innerHTML = renderDoneStep();
+  if(state.step==='login'){ area.innerHTML = renderLoginStep(); bindEvents(); return; }
+  let inner = '';
+  if(state.mode === 'checkin'){
+    if(state.step==='pin') inner = renderPinStep();
+    else if(state.step==='confirm') inner = renderConfirmStep();
+    else if(state.step==='done') inner = renderDoneStep();
+  } else {
+    inner = renderLeaveStep();
+  }
+  area.innerHTML = renderModeTabs() + inner;
   bindEvents();
+}
+
+function renderModeTabs(){
+  return `
+    <div class="mode-tabs">
+      <button data-switch-mode="checkin" class="${state.mode==='checkin'?'active':''}">เช็คชื่อ</button>
+      <button data-switch-mode="leave" class="${state.mode==='leave'?'active':''}">ขอลา</button>
+    </div>`;
 }
 
 function renderLoginStep(){
@@ -201,6 +235,63 @@ function renderDoneStep(){
   `;
 }
 
+function renderLeaveStep(){
+  const f = state.leaveForm;
+  return `
+    <div class="profile-row">
+      <div class="av">${initials(state.profile.name)}</div>
+      <div>
+        <div class="nm">${escapeHtml(state.profile.name || state.profile.email)}</div>
+        <div class="em">${escapeHtml(state.profile.email)}</div>
+      </div>
+    </div>
+    <h2 class="step-title" style="text-align:left;">ยื่นขอลา</h2>
+    ${state.leaveError ? `<div class="error-box">${escapeHtml(state.leaveError)}</div>` : ''}
+    <div class="field">
+      <label>รายวิชา</label>
+      <input type="text" id="leaveSubject" placeholder="เช่น MK214 การตลาดดิจิทัล" value="${escapeHtml(f.subject||'')}">
+    </div>
+    <div class="field">
+      <label>วันที่ลา</label>
+      <input type="date" id="leaveDate" value="${escapeHtml(f.date||'')}">
+    </div>
+    <div class="field">
+      <label>ประเภทการลา</label>
+      <select id="leaveType">
+        ${['ลาป่วย','ลากิจ','อื่นๆ'].map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label>เหตุผล</label>
+      <textarea id="leaveReason" placeholder="อธิบายเหตุผลสั้นๆ">${escapeHtml(f.reason||'')}</textarea>
+    </div>
+    <div class="field">
+      <label>ลิงก์หลักฐาน (ถ้ามี — เช่น ใบรับรองแพทย์ผ่าน Google Drive)</label>
+      <input type="text" id="leaveAttachment" placeholder="https://drive.google.com/..." value="${escapeHtml(f.attachment||'')}">
+    </div>
+    <button class="btn btn-primary" id="leaveSubmitBtn">ส่งคำขอลา</button>
+
+    <h2 style="text-align:left; font-size:14px; margin:22px 0 10px;">ประวัติคำขอของฉัน</h2>
+    <div id="leaveHistoryList">${renderLeaveHistoryList()}</div>
+  `;
+}
+
+function renderLeaveHistoryList(){
+  if(state.leaveHistory === null) return `<p class="muted" style="text-align:left;">กำลังโหลด...</p>`;
+  if(!state.leaveHistory.length) return `<p class="muted" style="text-align:left;">ยังไม่เคยยื่นขอลา</p>`;
+  const statusLabel = { pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ' };
+  return state.leaveHistory.map(l => `
+    <div class="leave-item">
+      <div class="lt">${escapeHtml(l.subject_name || l.subject_code || 'ไม่ระบุวิชา')} <span class="leave-badge ${l.status}">${statusLabel[l.status]||l.status}</span></div>
+      <div class="lm">
+        ${escapeHtml(l.leave_type)} · วันที่ ${escapeHtml(l.leave_date)}<br>
+        ${l.reason ? escapeHtml(l.reason) + '<br>' : ''}
+        ${l.attachment_url ? `<a href="${escapeHtml(l.attachment_url)}" target="_blank" style="color:var(--blue);">ดูหลักฐานที่แนบ</a><br>` : ''}
+        ${l.lecturer_comment ? `<i>ความเห็นอาจารย์: ${escapeHtml(l.lecturer_comment)}</i>` : ''}
+      </div>
+    </div>`).join('');
+}
+
 function bindEvents(){
   const area = document.getElementById('cardArea');
 
@@ -249,6 +340,66 @@ function bindEvents(){
 
   const logoutBtn = document.getElementById('logoutBtn');
   if(logoutBtn){ logoutBtn.onclick = async ()=>{ await sb.auth.signOut(); window.location.reload(); }; }
+
+  area.querySelectorAll('[data-switch-mode]').forEach(btn=>{
+    btn.onclick = ()=>{
+      state.mode = btn.dataset.switchMode;
+      if(state.mode==='leave' && state.leaveHistory===null){
+        render();
+        loadLeaveHistory();
+      } else {
+        render();
+      }
+    };
+  });
+
+  const leaveSubmitBtn = document.getElementById('leaveSubmitBtn');
+  if(leaveSubmitBtn){ leaveSubmitBtn.onclick = handleLeaveSubmit; }
+  ['leaveSubject','leaveDate','leaveType','leaveReason','leaveAttachment'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){ el.oninput = ()=>{
+      const key = id.replace('leave','').replace(/^./, s=>s.toLowerCase());
+      state.leaveForm[key] = el.value;
+    }; }
+  });
+}
+
+async function loadLeaveHistory(){
+  const { data, error } = await sb.from('leave_requests').select('*').eq('student_email', state.profile.email).order('created_at', {ascending:false});
+  state.leaveHistory = error ? [] : data;
+  const listEl = document.getElementById('leaveHistoryList');
+  if(listEl) listEl.innerHTML = renderLeaveHistoryList();
+}
+
+async function handleLeaveSubmit(){
+  const f = state.leaveForm;
+  const subject = (document.getElementById('leaveSubject').value || '').trim();
+  const date = document.getElementById('leaveDate').value;
+  const type = document.getElementById('leaveType').value;
+  const reason = (document.getElementById('leaveReason').value || '').trim();
+  const attachment = (document.getElementById('leaveAttachment').value || '').trim();
+  if(!date || !type){ state.leaveError = 'กรุณาเลือกวันที่และประเภทการลา'; render(); return; }
+  const btn = document.getElementById('leaveSubmitBtn');
+  btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+  const { error } = await sb.from('leave_requests').insert({
+    student_email: state.profile.email,
+    student_id: state.profile.student_id,
+    student_name: state.profile.name || state.profile.email,
+    subject_name: subject || null,
+    leave_date: date,
+    leave_type: type,
+    reason: reason || null,
+    attachment_url: attachment || null,
+    status: 'pending'
+  });
+  btn.disabled = false; btn.textContent = 'ส่งคำขอลา';
+  if(error){ state.leaveError = 'ส่งคำขอไม่สำเร็จ: ' + error.message; render(); return; }
+  state.leaveError = null;
+  state.leaveForm = { type:'ลาป่วย' };
+  toast('ส่งคำขอลาสำเร็จ รออาจารย์อนุมัติ');
+  state.leaveHistory = null;
+  render();
+  loadLeaveHistory();
 }
 
 async function handlePinSubmit(){

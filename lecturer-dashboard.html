@@ -311,7 +311,7 @@
     </section>
 
     <div class="card" style="margin-bottom:18px; border-color:var(--orange); background:var(--orange-bg);" id="phaseNote">
-      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 4 หน้า (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ, สรุปการเข้าเรียน) ส่วนอีก 2 เมนูด้านล่างยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
+      <div style="font-size:13px; color:var(--orange);"><b>หมายเหตุ:</b> ตอนนี้ทำงานจริงแล้ว 5 หน้า (Dashboard, เช็คชื่อ Real-time, จัดการรายชื่อ, สรุปการเข้าเรียน, อนุมัติการลา) เหลือแค่ "รายงาน" ที่ยังเป็น mockup ตัวอย่างหน้าตาเท่านั้น</div>
     </div>
 
     <!-- STATS DASHBOARD -->
@@ -409,39 +409,15 @@
 
     <!-- LEAVE APPROVAL -->
     <section class="page" id="page-leave">
-      <div class="badge badge-orange" style="margin-bottom:16px;">ตัวอย่าง UI เท่านั้น ยังไม่เชื่อมข้อมูลจริง</div>
-      <div class="topbar"><div><h1>อนุมัติการลา</h1><div class="sub">คำขอลาที่รอดำเนินการ 3 รายการ</div></div></div>
-
-      <div class="leave-card">
-        <div class="init" style="width:44px; height:44px; font-size:14px;">สร</div>
-        <div class="info">
-          <div class="name">สมฤดี รักเรียน · 6512301</div>
-          <div class="meta">การตลาดดิจิทัล (MK214) · ลาป่วย 24 ก.ค. 2569<br>เหตุผล: มีไข้ ไปพบแพทย์ที่คลินิก · <a href="#" style="color:var(--blue);">ดูใบรับรองแพทย์ (Google Drive)</a></div>
-        </div>
-        <div class="leave-actions">
-          <span class="badge badge-orange">รออนุมัติ</span>
-          <button class="btn btn-primary">อนุมัติ</button>
-          <button class="btn btn-outline">ไม่อนุมัติ</button>
-        </div>
+      <div class="topbar"><div><h1>อนุมัติการลา</h1><div class="sub" id="leaveSubLabel">กำลังโหลด…</div></div></div>
+      <div class="filter-bar">
+        <div class="chip active" data-leave-filter="pending">รออนุมัติ</div>
+        <div class="chip" data-leave-filter="approved">อนุมัติแล้ว</div>
+        <div class="chip" data-leave-filter="rejected">ไม่อนุมัติ</div>
+        <div class="chip" data-leave-filter="all">ทั้งหมด</div>
+        <button class="btn btn-outline btn-sm" id="leaveRefreshBtn" style="margin-left:auto;">รีเฟรช</button>
       </div>
-
-      <div class="leave-card">
-        <div class="init" style="width:44px; height:44px; font-size:14px;">ธก</div>
-        <div class="info">
-          <div class="name">ธนกร กิจสมบูรณ์ · 6512309</div>
-          <div class="meta">การจัดการเชิงกลยุทธ์ (MG301) · ลากิจ 25 ก.ค. 2569<br>เหตุผล: ธุระครอบครัวต่างจังหวัด · <a href="#" style="color:var(--blue);">ดูหลักฐานแนบ (Google Drive)</a></div>
-        </div>
-        <div class="leave-actions"><span class="badge badge-green">อนุมัติแล้ว</span></div>
-      </div>
-
-      <div class="leave-card">
-        <div class="init" style="width:44px; height:44px; font-size:14px;">นพ</div>
-        <div class="info">
-          <div class="name">นภัสวรรณ พงษ์ไทย · 6512305</div>
-          <div class="meta">หลักการบัญชี 2 (AC102) · ลาป่วย 22 ก.ค. 2569<br>เหตุผล: ผ่าตัดฟันคุด · <a href="#" style="color:var(--blue);">ดูใบรับรองแพทย์ (Google Drive)</a></div>
-        </div>
-        <div class="leave-actions"><span class="badge badge-red">ไม่อนุมัติ</span></div>
-      </div>
+      <div id="leaveListWrap"><div class="empty-note">กำลังโหลด...</div></div>
     </section>
 
     <!-- REPORTS -->
@@ -776,6 +752,75 @@ async function initApp(){
   state.rosterCount = count ?? null;
   renderDashboard();
 }
+
+// ===== LEAVE APPROVAL =====
+let leaveData = [];
+let leaveFilter = 'pending';
+
+async function renderLeavePage(){
+  const wrap = document.getElementById('leaveListWrap');
+  wrap.innerHTML = '<div class="empty-note">กำลังโหลด...</div>';
+  const { data, error } = await sb.from('leave_requests').select('*').order('created_at', {ascending:false});
+  if(error){ wrap.innerHTML = '<div class="empty-note">โหลดข้อมูลไม่สำเร็จ</div>'; return; }
+  leaveData = data || [];
+  const pendingCount = leaveData.filter(l=>l.status==='pending').length;
+  document.getElementById('leaveSubLabel').textContent = `คำขอลาที่รอดำเนินการ ${pendingCount} รายการ · ทั้งหมด ${leaveData.length} รายการ`;
+  renderLeaveList();
+}
+
+function renderLeaveList(){
+  const wrap = document.getElementById('leaveListWrap');
+  const rows = leaveFilter==='all' ? leaveData : leaveData.filter(l=>l.status===leaveFilter);
+  if(!rows.length){ wrap.innerHTML = '<div class="card"><div class="empty-note">ไม่มีรายการในหมวดนี้</div></div>'; return; }
+  const statusLabel = {pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ'};
+  const statusBadgeClass = {pending:'badge-orange', approved:'badge-green', rejected:'badge-red'};
+  wrap.innerHTML = rows.map(l=>`
+    <div class="leave-card">
+      <div class="init" style="width:44px; height:44px; font-size:14px;">${initials(l.student_name)}</div>
+      <div class="info">
+        <div class="name">${escapeHtml(l.student_name)}${l.student_id ? ' · '+escapeHtml(l.student_id) : ''}</div>
+        <div class="meta">
+          ${escapeHtml(l.subject_name || 'ไม่ระบุวิชา')} · ${escapeHtml(l.leave_type)} วันที่ ${escapeHtml(l.leave_date)}<br>
+          ${l.reason ? 'เหตุผล: '+escapeHtml(l.reason)+' · ' : ''}${l.attachment_url ? `<a href="${escapeHtml(l.attachment_url)}" target="_blank" style="color:var(--blue);">ดูหลักฐานที่แนบ</a>` : 'ไม่มีไฟล์แนบ'}
+          ${l.lecturer_comment ? `<br><i>ความเห็น: ${escapeHtml(l.lecturer_comment)}</i>` : ''}
+        </div>
+      </div>
+      <div class="leave-actions">
+        <span class="badge ${statusBadgeClass[l.status]}">${statusLabel[l.status]||l.status}</span>
+        ${l.status==='pending' ? `
+          <button class="btn btn-primary" data-approve="${l.id}">อนุมัติ</button>
+          <button class="btn btn-outline" data-reject="${l.id}">ไม่อนุมัติ</button>
+        ` : ''}
+      </div>
+    </div>`).join('');
+
+  wrap.querySelectorAll('[data-approve]').forEach(btn=>{
+    btn.onclick = ()=> reviewLeave(btn.dataset.approve, 'approved');
+  });
+  wrap.querySelectorAll('[data-reject]').forEach(btn=>{
+    btn.onclick = ()=> reviewLeave(btn.dataset.reject, 'rejected');
+  });
+}
+
+async function reviewLeave(id, status){
+  const comment = status === 'rejected' ? (prompt('ระบุเหตุผลที่ไม่อนุมัติ (ไม่บังคับ)') || null) : null;
+  const { error } = await sb.from('leave_requests').update({
+    status, lecturer_comment: comment, reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id
+  }).eq('id', id);
+  if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
+  toast(status==='approved' ? 'อนุมัติแล้ว' : 'ปฏิเสธคำขอแล้ว');
+  renderLeavePage();
+}
+
+document.querySelectorAll('[data-leave-filter]').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-leave-filter]').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    leaveFilter = chip.dataset.leaveFilter;
+    renderLeaveList();
+  });
+});
+document.getElementById('leaveRefreshBtn').addEventListener('click', renderLeavePage);
 
 // ===== ROSTER =====
 let rosterData = [];
@@ -1141,6 +1186,7 @@ document.querySelectorAll('.navitem').forEach(item=>{
     if(page === 'live') populateLivePicker();
     if(page === 'students') renderRosterPage();
     if(page === 'stats') renderStatsPage();
+    if(page === 'leave') renderLeavePage();
   });
 });
 
