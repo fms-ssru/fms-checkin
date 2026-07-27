@@ -84,6 +84,7 @@
   .error-box{background:var(--red-bg); color:var(--red); border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; text-align:left;}
   .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:9px; font-size:13.5px; z-index:1000; max-width:90vw; text-align:center;}
   .footnote{text-align:center; font-size:11px; color:var(--slate-light); margin-top:20px; line-height:1.6;}
+  @keyframes spin{ to{ transform:rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -97,7 +98,10 @@
     <button class="theme-toggle" id="themeToggle" type="button" aria-label="สลับโหมดสว่าง/มืด">☀</button>
   </div>
 
-  <div class="card" id="cardArea"></div>
+  <div class="card" id="cardArea">
+    <div class="auth-spinner" style="width:30px;height:30px;margin:14px auto;border-radius:50%;border:3px solid var(--line);border-top-color:var(--blue);animation:spin .8s linear infinite;"></div>
+    <p class="muted">กำลังตรวจสอบสิทธิ์เข้าใช้งาน...</p>
+  </div>
   <p class="footnote">ต้องเข้าสู่ระบบด้วยบัญชี Google มหาวิทยาลัย (@ssru.ac.th) ของคุณเองเท่านั้น<br>ระบบจะบันทึกชื่อ-อีเมลของคุณตามบัญชีที่ login โดยอัตโนมัติ</p>
 </div>
 
