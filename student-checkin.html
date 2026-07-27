@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
   :root{
     --blue:#2563EB; --blue-dark:#1D4ED8; --blue-light:#EFF4FF;
@@ -153,6 +154,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const state = { step:'login', mode:'checkin', profile:null, pinError:null, pinDigits:null, matchedSession:null, result:null, leaveHistory:null, leaveError:null, leaveForm:{ type:'ลาป่วย' }, myCourses:null, leaveShown:5, attHistory:null, attShown:5, histDateFrom:'', histDateTo:'' };
 
 function render(){
+  stopQrScanner();
   const area = document.getElementById('cardArea');
   if(state.step==='login'){ area.innerHTML = renderLoginStep(); bindEvents(); return; }
   let inner = '';
@@ -198,12 +200,21 @@ function renderPinStep(){
       </div>
     </div>
     <h2 class="step-title">กรอกรหัส PIN เช็คชื่อ</h2>
-    <p class="muted">ขอ PIN 4 หลักจากอาจารย์</p>
+    <p class="muted">ขอ PIN 4 หลักจากอาจารย์ หรือสแกน QR ที่จอ</p>
     ${state.pinError ? `<div class="error-box">${escapeHtml(state.pinError)}</div>` : ''}
     <div class="pin-input-row">
       ${[0,1,2,3].map(i=>`<input type="tel" maxlength="1" inputmode="numeric" class="pin-box" data-i="${i}" value="${state.pinDigits ? (state.pinDigits[i]||'') : ''}">`).join('')}
     </div>
     <button class="btn btn-primary" id="pinSubmitBtn" style="margin-top:16px;">ตรวจสอบ PIN</button>
+    <button class="btn btn-outline" id="scanQrBtn" style="margin-top:10px;">📷 สแกน QR Code</button>
+    <div id="qrScannerPanel" style="display:none; margin-top:14px;">
+      <div style="position:relative; border-radius:14px; overflow:hidden; background:#000;">
+        <video id="qrVideo" playsinline muted style="width:100%; display:block;"></video>
+        <div style="position:absolute; inset:0; border:3px solid rgba(255,255,255,0.6); border-radius:14px; box-sizing:border-box; pointer-events:none;"></div>
+      </div>
+      <p class="muted" id="qrScanStatus" style="text-align:center; margin-top:8px;">เล็งกล้องไปที่ QR Code</p>
+      <button class="btn btn-ghost" id="cancelScanBtn">ปิดกล้อง</button>
+    </div>
     <button class="btn btn-ghost" id="logoutBtn">ออกจากระบบ</button>
   `;
 }
@@ -401,6 +412,10 @@ function bindEvents(){
 
   const pinSubmitBtn = document.getElementById('pinSubmitBtn');
   if(pinSubmitBtn){ pinSubmitBtn.onclick = handlePinSubmit; }
+  const scanQrBtn = document.getElementById('scanQrBtn');
+  if(scanQrBtn){ scanQrBtn.onclick = startQrScanner; }
+  const cancelScanBtn = document.getElementById('cancelScanBtn');
+  if(cancelScanBtn){ cancelScanBtn.onclick = stopQrScanner; }
 
   const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
   if(confirmSubmitBtn){ confirmSubmitBtn.onclick = handleConfirmSubmit; }
@@ -522,6 +537,74 @@ async function handleLeaveSubmit(){
   loadLeaveHistory();
 }
 
+// ===== QR CAMERA SCANNER =====
+let qrStream = null;
+let qrScanRAF = null;
+
+async function startQrScanner(){
+  const panel = document.getElementById('qrScannerPanel');
+  const statusEl = document.getElementById('qrScanStatus');
+  const video = document.getElementById('qrVideo');
+  panel.style.display = 'block';
+  statusEl.textContent = 'กำลังเปิดกล้อง...';
+  try{
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  }catch(err){
+    statusEl.textContent = 'เปิดกล้องไม่สำเร็จ: ' + (err.message || 'ไม่ได้รับอนุญาตให้ใช้กล้อง') + ' — พิมพ์ PIN แทนได้เลย';
+    return;
+  }
+  video.srcObject = qrStream;
+  await video.play();
+  statusEl.textContent = 'เล็งกล้องไปที่ QR Code';
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  function scanFrame(){
+    if(!qrStream) return; // ถูกปิดไปแล้ว
+    if(video.readyState === video.HAVE_ENOUGH_DATA){
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if(code && code.data){
+        handleQrDetected(code.data);
+        return; // หยุดลูป ให้ handleQrDetected จัดการปิดกล้องเอง
+      }
+    }
+    qrScanRAF = requestAnimationFrame(scanFrame);
+  }
+  qrScanRAF = requestAnimationFrame(scanFrame);
+}
+
+function stopQrScanner(){
+  if(qrScanRAF){ cancelAnimationFrame(qrScanRAF); qrScanRAF = null; }
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream = null; }
+  const panel = document.getElementById('qrScannerPanel');
+  if(panel) panel.style.display = 'none';
+}
+
+function handleQrDetected(text){
+  // ข้อความที่อ่านได้อาจเป็นลิงก์ ?pin=XXXX หรือแค่เลข PIN 4 หลักตรงๆ
+  let pin = null;
+  try{
+    const url = new URL(text);
+    pin = url.searchParams.get('pin');
+  }catch(e){
+    if(/^\d{4}$/.test(text.trim())) pin = text.trim();
+  }
+  stopQrScanner();
+  if(!pin || !/^\d{4}$/.test(pin)){
+    toast('อ่าน QR ไม่สำเร็จ ลองใหม่หรือพิมพ์ PIN แทน');
+    return;
+  }
+  state.pinDigits = pin.split('');
+  state.pinError = null;
+  render();
+  handlePinSubmit();
+}
+
 async function handlePinSubmit(){
   const area = document.getElementById('cardArea');
   const digits = Array.from(area.querySelectorAll('.pin-box')).map(i=>i.value);
@@ -540,6 +623,20 @@ async function handlePinSubmit(){
     return;
   }
   const s = data[0];
+
+  // เช็คว่านักศึกษาคนนี้ถูกเพิ่มอยู่ในหมู่เรียนนี้จริงหรือไม่
+  const { data: enrollCheck } = await sb.from('roster')
+    .select('id')
+    .eq('section_id', s.section_id)
+    .eq('student_id', state.profile.student_id || '')
+    .limit(1);
+  if(!enrollCheck || !enrollCheck.length){
+    state.pinError = 'ไม่พบข้อมูลนักศึกษา กรุณาติดต่ออาจารย์ผู้สอน';
+    state.pinDigits = digits;
+    render();
+    return;
+  }
+
   state.matchedSession = {
     ...s,
     start: String(s.start_time).slice(0,5),
