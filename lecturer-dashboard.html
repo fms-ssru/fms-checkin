@@ -276,8 +276,9 @@
           <h1>ภาพรวมคาบเรียนวันนี้</h1>
           <div class="sub" id="todayDateLabel">กำลังโหลด…</div>
         </div>
-        <div class="topbar-actions">
+        <div class="topbar-actions" style="position:relative;">
           <div class="icon-btn" id="notifBell" style="cursor:pointer;">🔔<span class="dot count" id="notifDot" style="display:none;"></span></div>
+          <div id="notifDropdown" style="display:none; position:absolute; top:46px; right:0; width:320px; max-height:400px; overflow-y:auto; background:var(--white); border:1px solid var(--line); border-radius:12px; box-shadow:0 10px 30px -10px rgba(15,23,42,0.25); z-index:100;"></div>
         </div>
       </div>
 
@@ -1249,8 +1250,15 @@ async function initApp(){
   refreshNotifBell();
 }
 
+let pendingLeaveNotifs = [];
+
 async function refreshNotifBell(){
-  const { count } = await sb.from('leave_requests').select('*', {count:'exact', head:true}).eq('status','pending');
+  const { data, count } = await sb.from('leave_requests')
+    .select('*, courses(code,name)', {count:'exact'})
+    .eq('status','pending')
+    .order('created_at', {ascending:false})
+    .limit(20);
+  pendingLeaveNotifs = data || [];
   const dot = document.getElementById('notifDot');
   if(!dot) return;
   if(count && count > 0){
@@ -1262,8 +1270,69 @@ async function refreshNotifBell(){
     document.getElementById('notifBell').title = 'ไม่มีคำขอลาค้างอนุมัติ';
   }
 }
-document.getElementById('notifBell').addEventListener('click', ()=>{
-  document.querySelector('.navitem[data-page="leave"]').click();
+
+function getSessionReminderItems(){
+  const today = todayISODate();
+  const now = nowHHMM();
+  const todays = state.sessions.filter(s=>s.date===today);
+  const needOpen = todays.filter(s=>s.status==='scheduled' && now >= s.start).map(s=>({ type:'open', s }));
+  const needClose = todays.filter(s=>s.status==='open' && now > s.end).map(s=>({ type:'close', s }));
+  return [...needClose, ...needOpen];
+}
+
+function renderNotifDropdown(){
+  const dd = document.getElementById('notifDropdown');
+  const reminders = getSessionReminderItems();
+  const totalCount = pendingLeaveNotifs.length + reminders.length;
+
+  let html = `<div style="padding:12px 14px; border-bottom:1px solid var(--line); font-weight:600; font-size:13px;">การแจ้งเตือน (${totalCount})</div>`;
+
+  if(!totalCount){
+    html += `<div class="empty-note" style="padding:20px;">ไม่มีการแจ้งเตือนตอนนี้</div>`;
+  } else {
+    reminders.forEach(r=>{
+      const isClose = r.type==='close';
+      html += `<div class="notif-item" data-notif-nav="live" style="padding:12px 14px; border-bottom:1px solid var(--line); cursor:pointer; font-size:12.5px;">
+        <div style="font-weight:600; color:${isClose?'var(--red)':'var(--orange)'};">${isClose?'⚠️ ลืมปิดคาบ':'⏰ ถึงเวลาเปิดคาบ'}</div>
+        <div class="muted" style="margin-top:2px;">${escapeHtml(r.s.subject)} (${escapeHtml(r.s.sectionName)}) · ${isClose?'หมดเวลา '+r.s.end:'เริ่ม '+r.s.start}</div>
+      </div>`;
+    });
+    pendingLeaveNotifs.forEach(l=>{
+      const subjectLabel = l.courses ? `${l.courses.name} (${l.courses.code})` : 'ไม่ระบุวิชา';
+      html += `<div class="notif-item" data-notif-nav="leave" style="padding:12px 14px; border-bottom:1px solid var(--line); cursor:pointer; font-size:12.5px;">
+        <div style="font-weight:600; color:var(--blue-dark);">📩 คำขอลารออนุมัติ</div>
+        <div class="muted" style="margin-top:2px;">${escapeHtml(l.student_name)} · ${escapeHtml(subjectLabel)} · ${escapeHtml(l.leave_type)} ${escapeHtml(l.leave_date)}</div>
+      </div>`;
+    });
+  }
+  dd.innerHTML = html;
+  dd.querySelectorAll('[data-notif-nav]').forEach(item=>{
+    item.addEventListener('mouseenter', ()=>{ item.style.background = 'var(--blue-light)'; });
+    item.addEventListener('mouseleave', ()=>{ item.style.background = ''; });
+    item.onclick = ()=>{
+      const page = item.dataset.notifNav;
+      document.getElementById('notifDropdown').style.display = 'none';
+      document.querySelector(`.navitem[data-page="${page}"]`).click();
+    };
+  });
+}
+
+document.getElementById('notifBell').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  const dd = document.getElementById('notifDropdown');
+  const isOpen = dd.style.display !== 'none';
+  if(isOpen){
+    dd.style.display = 'none';
+  } else {
+    renderNotifDropdown();
+    dd.style.display = 'block';
+  }
+});
+document.addEventListener('click', (e)=>{
+  const dd = document.getElementById('notifDropdown');
+  if(dd && dd.style.display !== 'none' && !dd.contains(e.target) && e.target.id !== 'notifBell'){
+    dd.style.display = 'none';
+  }
 });
 
 // ===== LEAVE APPROVAL =====
