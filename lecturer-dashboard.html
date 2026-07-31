@@ -102,6 +102,10 @@
     display:flex; align-items:center; justify-content:center; color:var(--slate); cursor:pointer; position:relative;
   }
   .icon-btn .dot{position:absolute; top:7px; right:7px; width:7px; height:7px; border-radius:50%; background:var(--red);}
+  .icon-btn .dot.count{
+    width:auto; height:auto; min-width:16px; padding:1px 4px; top:-5px; right:-5px;
+    font-size:10px; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center; line-height:1.4;
+  }
 
   .glass-card{
     background:var(--glass-bg); backdrop-filter:blur(10px); border:1px solid var(--glass-border);
@@ -273,10 +277,11 @@
           <div class="sub" id="todayDateLabel">กำลังโหลด…</div>
         </div>
         <div class="topbar-actions">
-          <div class="icon-btn">🔔<span class="dot"></span></div>
+          <div class="icon-btn" id="notifBell" style="cursor:pointer;">🔔<span class="dot count" id="notifDot" style="display:none;"></span></div>
         </div>
       </div>
 
+      <div id="sessionReminders"></div>
       <div class="grid-4" id="summaryCards"></div>
 
       <div class="card" style="margin-bottom:18px;">
@@ -674,7 +679,70 @@ function renderDashboard(){
   list.innerHTML = todays.length ? todays.map(renderSessionRow).join('') : `<div class="card"><div class="empty-note">ยังไม่มีคาบเรียนวันนี้ — เพิ่มด้านบนได้เลย</div></div>`;
   document.getElementById('newDate').value = today;
   populateNewSessionDropdowns();
+  renderSessionReminders();
 }
+
+// ===== SESSION REMINDERS (เตือนถึงเวลาเปิดคาบ / ลืมปิดคาบ) =====
+let notifiedSessionIds = new Set();
+let notifPermissionAsked = false;
+
+function renderSessionReminders(){
+  const banner = document.getElementById('sessionReminders');
+  if(!banner) return;
+  const today = todayISODate();
+  const now = nowHHMM();
+  const todays = state.sessions.filter(s=>s.date===today);
+
+  const needOpen = todays.filter(s=>s.status==='scheduled' && now >= s.start);
+  const needClose = todays.filter(s=>s.status==='open' && now > s.end);
+
+  if(!needOpen.length && !needClose.length){ banner.innerHTML = ''; return; }
+
+  let html = '';
+  if(needOpen.length){
+    html += `<div class="card" style="margin-bottom:12px; border-color:var(--orange); background:var(--orange-bg);">
+      <div style="font-size:13px; color:var(--orange);"><b>⏰ ถึงเวลาเปิดคาบแล้ว:</b> ${needOpen.map(s=>`${escapeHtml(s.subject)} (${escapeHtml(s.sectionName)}) ${s.start}`).join(', ')}
+      <button class="btn btn-primary btn-sm" style="margin-left:10px;" onclick="document.getElementById('sessionList').scrollIntoView({behavior:'smooth'});">ไปที่รายการคาบเรียน</button>
+      </div>
+    </div>`;
+  }
+  if(needClose.length){
+    html += `<div class="card" style="margin-bottom:12px; border-color:var(--red); background:var(--red-bg);">
+      <div style="font-size:13px; color:var(--red);"><b>⚠️ ลืมปิดคาบเรียนที่หมดเวลาแล้ว:</b> ${needClose.map(s=>`${escapeHtml(s.subject)} (${escapeHtml(s.sectionName)}) หมดเวลา ${s.end}`).join(', ')}
+      <button class="btn btn-outline btn-sm" style="margin-left:10px; border-color:var(--red); color:var(--red);" onclick="document.querySelector('.navitem[data-page=live]').click();">ไปปิดคาบ</button>
+      </div>
+    </div>`;
+  }
+  banner.innerHTML = html;
+
+  // ยิง browser notification เฉพาะรายการที่ยังไม่เคยแจ้งเตือนในเซสชันนี้ (กันแจ้งซ้ำถี่เกินไป)
+  [...needOpen, ...needClose].forEach(s=>{
+    const key = s.id + ':' + s.status;
+    if(notifiedSessionIds.has(key)) return;
+    notifiedSessionIds.add(key);
+    const isOpen = s.status === 'scheduled';
+    sendBrowserNotification(
+      isOpen ? '⏰ ถึงเวลาเปิดคาบเรียน' : '⚠️ ลืมปิดคาบเรียน',
+      `${s.subject} (${s.sectionName}) ${isOpen ? 'เริ่ม '+s.start : 'หมดเวลา '+s.end}`
+    );
+  });
+}
+
+function sendBrowserNotification(title, body){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'granted'){
+    new Notification(title, { body, icon: 'fms-logo.png' });
+  } else if(Notification.permission !== 'denied' && !notifPermissionAsked){
+    notifPermissionAsked = true;
+    Notification.requestPermission().then(perm=>{
+      if(perm === 'granted') new Notification(title, { body, icon: 'fms-logo.png' });
+    });
+  }
+}
+
+setInterval(()=>{
+  if(document.getElementById('page-dashboard')?.classList.contains('active')) renderSessionReminders();
+}, 30000);
 
 async function openCheckin(id){
   const pin = String(Math.floor(1000+Math.random()*9000));
@@ -1178,7 +1246,25 @@ async function initApp(){
   const { count } = await sb.from('roster').select('*', {count:'exact', head:true});
   state.rosterCount = count ?? null;
   renderDashboard();
+  refreshNotifBell();
 }
+
+async function refreshNotifBell(){
+  const { count } = await sb.from('leave_requests').select('*', {count:'exact', head:true}).eq('status','pending');
+  const dot = document.getElementById('notifDot');
+  if(!dot) return;
+  if(count && count > 0){
+    dot.style.display = 'flex';
+    dot.textContent = count > 9 ? '9+' : String(count);
+    document.getElementById('notifBell').title = `มีคำขอลารออนุมัติ ${count} รายการ`;
+  } else {
+    dot.style.display = 'none';
+    document.getElementById('notifBell').title = 'ไม่มีคำขอลาค้างอนุมัติ';
+  }
+}
+document.getElementById('notifBell').addEventListener('click', ()=>{
+  document.querySelector('.navitem[data-page="leave"]').click();
+});
 
 // ===== LEAVE APPROVAL =====
 let leaveData = [];
@@ -1240,6 +1326,7 @@ async function reviewLeave(id, status){
   if(error){ toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
   toast(status==='approved' ? 'อนุมัติแล้ว' : 'ปฏิเสธคำขอแล้ว');
   renderLeavePage();
+  refreshNotifBell();
 }
 
 document.querySelectorAll('[data-leave-filter]').forEach(chip=>{
